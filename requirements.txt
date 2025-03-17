@@ -1,0 +1,23 @@
+fastapi>=0.68.0
+uvicorn[standard]>=0.15.0
+python-multipart>=0.0.5
+rembg>=2.0.50
+numpy>=1.21.0
+pillow>=8.3.0
+onnxruntime>=1.21.0
+cloudinary>=1.33.0
+python-dotenv>=0.19.0
+aiofiles>=0.8.0
+
+# SAM and YOLOv8 dependencies (using vit_b SAM model - smallest and fastest)
+segment-anything==1.0
+ultralytics==8.0.145
+# CPU-only versions of PyTorch to reduce size (comment these and use default for CUDA support)
+torch>=2.0.0+cpu
+torchvision>=0.15.0+cpu
+opencv-python>=4.8.0
+
+# Additional utilities
+redis>=4.5.5
+python-jose>=3.3.0
+pydantic>=2.0.0 

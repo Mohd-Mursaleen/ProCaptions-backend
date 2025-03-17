@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node/Frontend
+node_modules/
+frontend/node_modules/
+.next/
+out/
+build/
+models/
+
+# Project specific
+uploads/
+assets/fonts/
+.env
+.DS_Store
+
+# Large files
+*.pth
+*.pt
+*.onnx
+*.bin
