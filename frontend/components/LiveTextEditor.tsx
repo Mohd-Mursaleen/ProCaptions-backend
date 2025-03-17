@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Position } from '../types/api';
-import { FiMove, FiZoomIn, FiType, FiInfo, FiPlus, FiMinus } from 'react-icons/fi';
+import { FiMove, FiZoomIn, FiType, FiInfo, FiPlus, FiMinus, FiSettings, FiLayout, FiSliders, FiX } from 'react-icons/fi';
 import { MdCenterFocusStrong } from 'react-icons/md';
 
 interface LiveTextEditorProps {
@@ -17,6 +17,9 @@ interface LiveTextEditorProps {
   onPositionChange: (position: Position) => void;
   disabled: boolean;
 }
+
+// Tab type for editor settings
+type TabType = 'text' | 'style' | 'advanced';
 
 const AVAILABLE_FONTS = [
   { value: 'anton', label: 'Anton' },
@@ -112,6 +115,9 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   const [textDimensions, setTextDimensions] = useState<{ width: number, height: number } | null>(null);
   // Show help info
   const [showHelp, setShowHelp] = useState(false);
+  
+  // Active tab for settings panels
+  const [activeTab, setActiveTab] = useState<TabType>('text');
   
   const previewRef = useRef<HTMLDivElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -484,238 +490,338 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     );
   };
 
-  return (
-    <div className="w-full space-y-6">
-      {/* Controls */}
-      <div className="space-y-4 bg-white p-4 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-md font-medium">Text Settings</h3>
-          <button 
-            type="button"
-            onClick={() => setShowHelp(!showHelp)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <FiInfo size={18} />
-          </button>
-        </div>
-        
-        {showHelp && (
-          <div className="mb-4 bg-blue-50 p-3 rounded text-sm text-blue-800">
-            <p className="font-medium mb-1">Getting the best results:</p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>The preview shows approximately how your text will look in the final image</li>
-              <li>You can enter any font size directly in the input field</li>
-              <li>Use the center button to center your text exactly</li>
-              <li>For the most accurate preview, position your text in the center of the image</li>
-            </ul>
-          </div>
-        )}
-        
-        <div>
-          <label htmlFor="text-input" className="block text-sm font-medium text-gray-700 mb-1">
-            Text
-          </label>
-          <input
-            id="text-input"
-            type="text"
-            value={localText}
-            onChange={handleTextChange}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter text (e.g., hero)"
-            disabled={disabled}
-          />
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="font-select" className="block text-sm font-medium text-gray-700 mb-1">
-              Font
-            </label>
-            <select
-              id="font-select"
-              value={fontName}
-              onChange={handleFontChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              disabled={disabled}
-            >
-              {AVAILABLE_FONTS.map((font) => (
-                <option key={font.value} value={font.value}>
-                  {font.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label htmlFor="font-size" className="block text-sm font-medium text-gray-700 mb-1">
-              Font Size
-            </label>
-            <div className="flex items-center">
-              <button
-                type="button"
-                onClick={() => adjustFontSize(-10)}
-                className="p-2 border border-gray-300 rounded-l-md bg-gray-50 hover:bg-gray-100"
-                disabled={disabled}
-              >
-                <FiMinus size={16} />
-              </button>
+  // Tab navigation
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'text':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="text-input" className="block text-sm font-medium text-gray-700 mb-1">
+                Text Content
+              </label>
               <input
-                id="font-size-input"
-                type="number"
-                value={fontSizeInput}
-                onChange={handleFontSizeInputChange}
-                onBlur={applyFontSize}
-                onKeyPress={handleFontSizeKeyPress}
-                className="w-20 text-center border-y border-gray-300 py-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Size"
+                id="text-input"
+                type="text"
+                value={localText}
+                onChange={handleTextChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter text (e.g., hero)"
                 disabled={disabled}
               />
-              <button
-                type="button"
-                onClick={() => adjustFontSize(10)}
-                className="p-2 border border-gray-300 rounded-r-md bg-gray-50 hover:bg-gray-100"
-                disabled={disabled}
-              >
-                <FiPlus size={16} />
-              </button>
-              <span className="ml-2 text-gray-500 text-sm">px</span>
             </div>
             
-            {/* Font size presets */}
-            <div className="mt-2 flex space-x-2">
-              {[100, 150, 200, 250, 300].map(size => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => onFontSizeChange(size)}
-                  className={`text-xs py-1 px-2 rounded ${
-                    fontSize === size ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  disabled={disabled}
-                >
-                  {size}
-                </button>
-              ))}
+            <div>
+              <label htmlFor="font-select" className="block text-sm font-medium text-gray-700 mb-1">
+                Font Family
+              </label>
+              <select
+                id="font-select"
+                value={fontName}
+                onChange={handleFontChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                disabled={disabled}
+              >
+                {AVAILABLE_FONTS.map((font) => (
+                  <option key={font.value} value={font.value}>
+                    {font.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                id="with-period"
+                type="checkbox"
+                checked={withPeriod}
+                onChange={handleWithPeriodChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                disabled={disabled}
+              />
+              <label htmlFor="with-period" className="ml-2 block text-sm text-gray-700">
+                Add period at the end
+              </label>
             </div>
           </div>
-        </div>
+        );
         
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <input
-              id="with-period"
-              type="checkbox"
-              checked={withPeriod}
-              onChange={handleWithPeriodChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              disabled={disabled}
-            />
-            <label htmlFor="with-period" className="ml-2 block text-sm text-gray-700">
-              Add period at the end
-            </label>
+      case 'style':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="font-size" className="block text-sm font-medium text-gray-700 mb-1">
+                Font Size
+              </label>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => adjustFontSize(-10)}
+                  className="p-2 border border-gray-300 rounded-l-md bg-gray-50 hover:bg-gray-100"
+                  disabled={disabled}
+                >
+                  <FiMinus size={16} />
+                </button>
+                <input
+                  id="font-size-input"
+                  type="number"
+                  value={fontSizeInput}
+                  onChange={handleFontSizeInputChange}
+                  onBlur={applyFontSize}
+                  onKeyPress={handleFontSizeKeyPress}
+                  className="w-20 text-center border-y border-gray-300 py-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Size"
+                  disabled={disabled}
+                />
+                <button
+                  type="button"
+                  onClick={() => adjustFontSize(10)}
+                  className="p-2 border border-gray-300 rounded-r-md bg-gray-50 hover:bg-gray-100"
+                  disabled={disabled}
+                >
+                  <FiPlus size={16} />
+                </button>
+                <span className="ml-2 text-gray-500 text-sm">px</span>
+              </div>
+              
+              {/* Font size presets */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[100, 150, 200, 250, 300].map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => onFontSizeChange(size)}
+                    className={`text-xs py-1 px-2 rounded ${
+                      fontSize === size ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    disabled={disabled}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Text Position
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor="position-x" className="text-xs text-gray-500">X Position</label>
+                  <input
+                    id="position-x"
+                    type="number"
+                    value={position.x}
+                    onChange={(e) => onPositionChange({ ...position, x: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm"
+                    disabled={disabled}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="position-y" className="text-xs text-gray-500">Y Position</label>
+                  <input
+                    id="position-y"
+                    type="number"
+                    value={position.y}
+                    onChange={(e) => onPositionChange({ ...position, y: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm"
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCenterText}
+                className="mt-2 flex items-center justify-center w-full py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm"
+                title="Center text in image"
+                disabled={disabled}
+              >
+                <MdCenterFocusStrong size={16} className="mr-1" />
+                Center Text
+              </button>
+            </div>
+          </div>
+        );
+        
+      case 'advanced':
+        return (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Preview Mode
+              </label>
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode('position')}
+                  className={`p-2 rounded flex items-center ${previewMode === 'position' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  title="Position Mode: Click or drag to position text"
+                  disabled={disabled}
+                >
+                  <FiMove size={16} className="mr-1" />
+                  Position
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode('size')}
+                  className={`p-2 rounded flex items-center ${previewMode === 'size' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  title="Size Mode: Adjust font size"
+                  disabled={disabled}
+                >
+                  <FiZoomIn size={16} className="mr-1" />
+                  Size
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode('text')}
+                  className={`p-2 rounded flex items-center ${previewMode === 'text' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  title="Text Mode: Edit text content"
+                  disabled={disabled}
+                >
+                  <FiType size={16} className="mr-1" />
+                  Text
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-gray-50 rounded-md">
+              <div className="flex items-center mb-2">
+                <FiInfo size={16} className="text-blue-500 mr-2" />
+                <span className="text-sm font-medium text-gray-700">Help & Tips</span>
+              </div>
+              <ul className="text-xs text-gray-600 space-y-1 list-disc pl-5">
+                <li>Drag text directly in the preview to reposition</li>
+                <li>Use preview modes to focus on different editing tasks</li>
+                <li>For the most accurate preview, position text in the center</li>
+                <li>Use X and Y inputs for precise positioning</li>
+              </ul>
+            </div>
+            
+            {originalImageDimensions && (
+              <div className="text-xs text-gray-500">
+                <p>Image Size: {originalImageDimensions.width} × {originalImageDimensions.height}px</p>
+                <p>Text Position: {position.x}, {position.y}</p>
+                <p>Font Size: {fontSize}px</p>
+                <p>Preview Scale: {getScalingFactor().toFixed(2)}×</p>
+              </div>
+            )}
+          </div>
+        );
+        
+      default:
+        return null;
+    }
+  };
+  
+  return (
+    <div className="flex flex-col lg:flex-row gap-6">
+      {/* Preview Panel - Left Side */}
+      <div className="w-full lg:w-7/12">
+        <div className="sticky top-4">
+          <div className="mb-2 flex justify-between items-center">
+            <h3 className="text-md font-medium text-gray-700">Text Preview</h3>
+            <div className="text-sm text-gray-500">
+              {isDraggingText ? 'Dragging text...' : 'Drag to reposition'}
+            </div>
           </div>
           
-          <div className="flex space-x-2">
-            <button
-              type="button"
-              onClick={() => setPreviewMode('position')}
-              className={`p-2 rounded ${previewMode === 'position' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              title="Position Mode: Click or drag to position text"
-              disabled={disabled}
-            >
-              <FiMove size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreviewMode('size')}
-              className={`p-2 rounded ${previewMode === 'size' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              title="Size Mode: Adjust font size"
-              disabled={disabled}
-            >
-              <FiZoomIn size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreviewMode('text')}
-              className={`p-2 rounded ${previewMode === 'text' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              title="Text Mode: Edit text content"
-              disabled={disabled}
-            >
-              <FiType size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={handleCenterText}
-              className="p-2 rounded bg-gray-100 text-gray-600 hover:bg-gray-200"
-              title="Center text in image"
-              disabled={disabled}
-            >
-              <MdCenterFocusStrong size={18} />
-            </button>
+          <div 
+            ref={previewRef} 
+            className="relative w-full bg-gray-800 rounded-lg overflow-hidden shadow-md"
+            onClick={handleCanvasClick}
+            onMouseUp={handlePreviewMouseUp}
+          >
+            {backgroundImage ? (
+              <>
+                <img 
+                  ref={imageRef}
+                  src={getFullImageUrl(backgroundImage) || ''} 
+                  alt="Background" 
+                  className="w-full h-auto"
+                  onLoad={() => {
+                    // Force recalculation of preview dimensions when image loads
+                    if (imageRef.current) {
+                      const scale = getScalingFactor();
+                      console.log(`Preview scale factor: ${scale.toFixed(2)}`);
+                    }
+                  }}
+                />
+                {originalImageDimensions && (
+                  <>
+                    {/* Position marker */}
+                    {!isDraggingText && <PositionMarker />}
+                    
+                    <div 
+                      ref={textLayerRef}
+                      style={getTextStyle()}
+                      className="preview-text"
+                      onMouseDown={handleMouseDown}
+                    >
+                      {localText + (withPeriod ? '.' : '')}
+                    </div>
+                  </>
+                )}
+                
+                {/* Display coordinates and dimensions information */}
+                {originalImageDimensions && (
+                  <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs p-1 rounded">
+                    Position: {position.x}, {position.y} | 
+                    Size: {fontSize}px
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="w-full h-64 flex items-center justify-center text-gray-400">
+                Upload an image to preview text
+              </div>
+            )}
           </div>
         </div>
       </div>
       
-      {/* Preview */}
-      <div>
-        <div className="mb-2 flex justify-between items-center">
-          <h3 className="text-md font-medium text-gray-700">Preview</h3>
-          <div className="text-sm text-gray-500">
-            {isDraggingText ? 'Dragging text...' : 'Drag text to reposition'}
-          </div>
+      {/* Controls Panel - Right Side */}
+      <div className="w-full lg:w-5/12 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        {/* Tabs Navigation */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('text')}
+            className={`flex items-center px-4 py-3 text-sm font-medium ${
+              activeTab === 'text' 
+                ? 'text-blue-600 border-b-2 border-blue-500' 
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <FiType className="mr-2" size={16} />
+            Text
+          </button>
+          <button
+            onClick={() => setActiveTab('style')}
+            className={`flex items-center px-4 py-3 text-sm font-medium ${
+              activeTab === 'style' 
+                ? 'text-blue-600 border-b-2 border-blue-500' 
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <FiSliders className="mr-2" size={16} />
+            Style
+          </button>
+          <button
+            onClick={() => setActiveTab('advanced')}
+            className={`flex items-center px-4 py-3 text-sm font-medium ${
+              activeTab === 'advanced' 
+                ? 'text-blue-600 border-b-2 border-blue-500' 
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <FiSettings className="mr-2" size={16} />
+            Advanced
+          </button>
         </div>
         
-        <div 
-          ref={previewRef} 
-          className="relative w-full bg-gray-800 rounded-lg overflow-hidden"
-          onClick={handleCanvasClick}
-          onMouseUp={handlePreviewMouseUp}
-        >
-          {backgroundImage ? (
-            <>
-              <img 
-                ref={imageRef}
-                src={getFullImageUrl(backgroundImage) || ''} 
-                alt="Background" 
-                className="w-full h-auto"
-                onLoad={() => {
-                  // Force recalculation of preview dimensions when image loads
-                  if (imageRef.current) {
-                    const scale = getScalingFactor();
-                    console.log(`Preview scale factor: ${scale.toFixed(2)}`);
-                  }
-                }}
-              />
-              {originalImageDimensions && (
-                <>
-                  {/* Position marker */}
-                  {!isDraggingText && <PositionMarker />}
-                  
-                  <div 
-                    ref={textLayerRef}
-                    style={getTextStyle()}
-                    className="preview-text"
-                    onMouseDown={handleMouseDown}
-                  >
-                    {localText + (withPeriod ? '.' : '')}
-                  </div>
-                </>
-              )}
-              
-              {/* Display coordinates and dimensions information */}
-              {originalImageDimensions && (
-                <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs p-1 rounded">
-                  Position: {position.x}, {position.y} | 
-                  Size: {fontSize}px | 
-                  Scale: {getScalingFactor().toFixed(2)}x
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="w-full h-64 flex items-center justify-center text-gray-400">
-              Upload an image to preview text
-            </div>
-          )}
+        {/* Tab Content */}
+        <div className="p-4">
+          {renderTabContent()}
         </div>
       </div>
     </div>
