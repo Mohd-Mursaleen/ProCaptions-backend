@@ -5,6 +5,9 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { FiUpload, FiType, FiLayers, FiImage, FiDownload, FiMenu, FiX } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
+import VideoSection from '../components/VideoSection';
+import FeaturesSection from '../components/FeaturesSection';
+import TestimonialsSection from '../components/TestimonialsSection';
 
 const Home: NextPage = () => {
   const router = useRouter();
@@ -71,8 +74,11 @@ const Home: NextPage = () => {
               <a href="#how-it-works" className="text-white/80 hover:text-white transition-colors">
                 How It Works
               </a>
-              <a href="#examples" className="text-white/80 hover:text-white transition-colors">
-                Examples
+              <a href="#testimonials" className="text-white/80 hover:text-white transition-colors">
+                Testimonials
+              </a>
+              <a href="#demo" className="text-white/80 hover:text-white transition-colors">
+                Demo
               </a>
             </nav>
 
@@ -118,11 +124,18 @@ const Home: NextPage = () => {
                     How It Works
                   </a>
                   <a
-                    href="#examples"
+                    href="#testimonials"
                     className="text-white/80 hover:text-white transition-colors py-2"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
-                    Examples
+                    Testimonials
+                  </a>
+                  <a
+                    href="#demo"
+                    className="text-white/80 hover:text-white transition-colors py-2"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Demo
                   </a>
                   <div className="pt-2">
                     <button
@@ -221,91 +234,10 @@ const Home: NextPage = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-[#030303]/80 pointer-events-none" />
       </div>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 relative">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-rose-300">
-              Key Features
-            </h2>
-            <p className="text-white/40 max-w-2xl mx-auto">
-              ProCaptions offers powerful features to help you create stunning visual content.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              viewport={{ once: true }}
-              className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl p-6"
-            >
-              <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-                <FiImage className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">AI-Powered Subject Isolation</h3>
-              <p className="text-white/40">Automatically separates the foreground subject from the background using advanced AI.</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              viewport={{ once: true }}
-              className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl p-6"
-            >
-              <div className="bg-gradient-to-br from-rose-500 to-rose-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-                <FiType className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Dramatic Text Effects</h3>
-              <p className="text-white/40">Create eye-catching text effects with customizable fonts, sizes, and styles.</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              viewport={{ once: true }}
-              className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl p-6"
-            >
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-                <FiLayers className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Multi-Layer Text Editing</h3>
-              <p className="text-white/40">Add multiple text layers with different styles, positions, and effects.</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              viewport={{ once: true }}
-              className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl p-6"
-            >
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-                <FiUpload className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Easy Upload Process</h3>
-              <p className="text-white/40">Simple drag-and-drop interface for quick image uploads and processing.</p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              viewport={{ once: true }}
-              className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl p-6"
-            >
-              <div className="bg-gradient-to-br from-green-500 to-green-600 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
-                <FiDownload className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">High-Quality Exports</h3>
-              <p className="text-white/40">Download your creations in high resolution, ready for social media or printing.</p>
-            </motion.div>
-          </div>
-        </div>
-      </section>
+      {/* Video Demo Section - Using VideoSection Component */}
+      <VideoSection />
+      {/* Features Section - Using FeaturesSection Component */}
+      <FeaturesSection />
 
       {/* How It Works Section */}
       <section id="how-it-works" className="py-24 relative bg-gradient-to-b from-transparent to-black/40">
@@ -384,53 +316,11 @@ const Home: NextPage = () => {
         </div>
       </section>
 
-      {/* Examples Section */}
-      <section id="examples" className="py-24 relative">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-rose-300">
-              See It In Action
-            </h2>
-            <p className="text-white/40 max-w-2xl mx-auto">
-              Check out some examples of what you can create with ProCaptions.
-            </p>
-          </div>
+      {/* Testimonials Section - Using TestimonialsSection Component */}
+      <TestimonialsSection />
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3].map((item) => (
-              <motion.div 
-                key={item}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: item * 0.1 }}
-                viewport={{ once: true }}
-                className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden"
-              >
-                <div className="aspect-video bg-gradient-to-br from-indigo-900/30 to-rose-900/30 flex items-center justify-center">
-                  <div className="text-xl text-white/50">Example Image {item}</div>
-                </div>
-                <div className="p-4">
-                  <h3 className="text-lg font-medium mb-1">Design Style {item}</h3>
-                  <p className="text-white/40 text-sm">Create professional poster designs effortlessly</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
 
-          <div className="text-center mt-12">
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              viewport={{ once: true }}
-              onClick={handleGetStarted}
-              className="bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-6 py-3 rounded-lg shadow-lg shadow-indigo-500/20"
-            >
-              Create Your Own
-            </motion.button>
-          </div>
-        </div>
-      </section>
+
 
       {/* CTA Section */}
       <section className="py-24 relative">
