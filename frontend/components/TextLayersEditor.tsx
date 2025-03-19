@@ -1,7 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Position, TextLayer, TextLayerStyle } from '../types/api';
+"use client"
+
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
+import type { Position, TextLayer, TextLayerStyle } from "../types/api"
+import { Plus, X, ArrowUp, ArrowDown, Move, Minus, Type, Settings, ChevronDown, Layers } from "lucide-react"
+import { MdCenterFocusStrong } from "react-icons/md"
+import { motion } from "framer-motion"
 import { FiPlus, FiX, FiArrowUp, FiArrowDown, FiMove, FiEdit2, FiDroplet, FiZap, FiMinus, FiLayout, FiType, FiSettings } from 'react-icons/fi';
-import { MdCenterFocusStrong } from 'react-icons/md';
 
 interface TextLayersEditorProps {
   backgroundImage: string | null;
@@ -526,15 +531,15 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     const previewPos = originalToPreviewCoordinates(position.x, position.y);
     
     return (
-      <div 
+      <div
         className="absolute w-4 h-4 pointer-events-none z-5"
         style={{
           top: `${previewPos.y}px`,
           left: `${previewPos.x}px`,
-          transform: 'translate(-50%, -50%)',
+          transform: "translate(-50%, -50%)",
         }}
       >
-        <div className="absolute w-2 h-2 rounded-full bg-white border border-gray-400 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute w-2 h-2 rounded-full bg-indigo-400 border border-indigo-600 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-glow"></div>
       </div>
     );
   };
@@ -542,89 +547,94 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
   // Render different tab content based on active tab
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'layers':
+      case "layers":
         return (
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium">Text Layers</h3>
+              <h3 className="text-lg font-medium text-white/90">Text Layers</h3>
               <button
                 type="button"
                 onClick={handleAddLayer}
                 disabled={disabled}
-                className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                className="p-2 bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-full hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                 title="Add new text layer"
               >
-                <FiPlus />
+                <Plus size={16} />
               </button>
             </div>
-            
+
             {layers.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-white/50">
                 <p>No text layers yet</p>
                 <p className="text-sm mt-2">Click the + button to add your first text layer</p>
               </div>
             ) : (
               <ul className="space-y-2">
                 {layers.map((layer, index) => (
-                  <li
+                  <motion.li
                     key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
                     className={`flex items-center justify-between p-3 rounded-md cursor-pointer ${
-                      selectedLayerIndex === index ? 'bg-blue-100 border border-blue-300' : 'bg-gray-50 hover:bg-gray-100'
+                      selectedLayerIndex === index
+                        ? "bg-indigo-500/20 border border-indigo-500/30"
+                        : "bg-white/5 hover:bg-white/10 border border-white/10"
                     }`}
                     onClick={() => setSelectedLayerIndex(index)}
                   >
                     <div className="flex items-center">
-                      <FiMove className="mr-2 text-gray-400" />
-                      <div className="truncate" style={{ maxWidth: '150px' }}>
-                        {layer.text || 'Empty text'}
+                      <Move className="mr-2 text-indigo-400" size={16} />
+                      <div className="truncate text-white/90" style={{ maxWidth: "150px" }}>
+                        {layer.text || "Empty text"}
                       </div>
                     </div>
                     <div className="flex space-x-1">
                       <button
                         type="button"
                         onClick={(e) => {
-                          e.stopPropagation();
-                          handleMoveUp(index);
+                          e.stopPropagation()
+                          handleMoveUp(index)
                         }}
                         disabled={index === 0 || disabled}
-                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
+                        className="p-1 text-white/60 hover:text-white disabled:opacity-30"
                         title="Move up"
                       >
-                        <FiArrowUp size={14} />
+                        <ArrowUp size={14} />
                       </button>
                       <button
                         type="button"
                         onClick={(e) => {
-                          e.stopPropagation();
-                          handleMoveDown(index);
+                          e.stopPropagation()
+                          handleMoveDown(index)
                         }}
                         disabled={index === layers.length - 1 || disabled}
-                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-30"
+                        className="p-1 text-white/60 hover:text-white disabled:opacity-30"
                         title="Move down"
                       >
-                        <FiArrowDown size={14} />
+                        <ArrowDown size={14} />
                       </button>
                       <button
                         type="button"
                         onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveLayer(index);
+                          e.stopPropagation()
+                          handleRemoveLayer(index)
                         }}
                         disabled={disabled}
-                        className="p-1 text-red-500 hover:text-red-700 disabled:opacity-30"
+                        className="p-1 text-rose-400 hover:text-rose-300 disabled:opacity-30"
                         title="Remove layer"
                       >
-                        <FiX size={14} />
+                        <X size={14} />
                       </button>
                     </div>
-                  </li>
+                  </motion.li>
                 ))}
               </ul>
             )}
           </div>
-        );
-        
-      case 'style':
+        )
+
+      case "style":
         return selectedLayerIndex >= 0 && selectedLayerIndex < layers.length ? (
           <div className="space-y-4">
             <div>
@@ -728,7 +738,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
           </div>
         );
       
-      case 'advanced':
+      case "advanced":
         return selectedLayerIndex >= 0 && selectedLayerIndex < layers.length ? (
           <div className="space-y-4">
             <div>
@@ -820,12 +830,17 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
       {/* Left side - preview */}
       <div className="md:w-3/5">
-        <div className="bg-white rounded-md shadow p-4">
-          <h3 className="text-lg font-medium mb-2">Text Preview</h3>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="bg-[#050510] rounded-lg shadow-lg p-4 border border-white/10"
+        >
+          <h3 className="text-lg font-medium mb-2 text-white/90">Text Preview</h3>
           
           {/* Interactive preview area with fixed aspect ratio */}
           <div 
-            className="relative bg-gray-800 rounded-lg overflow-hidden mb-4"
+            className="relative bg-[#030303] rounded-lg overflow-hidden mb-4 border border-white/5"
             style={{
               width: '100%',
               paddingTop: originalImageDimensions ? 
@@ -861,7 +876,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                   <div 
                     key={index}
                     style={getTextStyle(layer, index)}
-                    className={`preview-text-layer ${selectedLayerIndex === index ? 'ring-2 ring-blue-400' : ''}`}
+                    className={`preview-text-layer ${selectedLayerIndex === index ? 'ring-2 ring-indigo-400' : ''}`}
                     onClick={(e) => handleTextLayerClick(index, e)}
                     onMouseDown={(e) => handleTextLayerMouseDown(index, e)}
                   >
@@ -871,48 +886,48 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 
                 {/* Debug info */}
                 {originalImageDimensions && (
-                  <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs p-1 rounded">
+                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs p-1 rounded-md backdrop-blur-sm border border-white/10">
                     Image: {originalImageDimensions.width}x{originalImageDimensions.height} | 
                     Preview: {previewDimensions?.width}x{previewDimensions?.height}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+              <div className="absolute inset-0 flex items-center justify-center text-white/40 bg-gradient-to-br from-indigo-900/20 to-rose-900/20">
                 Upload an image to preview text layers
               </div>
             )}
           </div>
           
-          <div className="text-sm text-gray-500 text-center">
+          <div className="text-sm text-white/50 text-center">
             {layers.length ? 
               `${layers.length} text layer${layers.length > 1 ? 's' : ''} - Click to select or drag to reposition` : 
               'No text layers added yet'}
           </div>
-        </div>
+        </motion.div>
       </div>
       
       {/* Right side - editor controls */}
-      <div className="md:w-2/5 bg-white rounded-md shadow">
+      <div className="md:w-2/5 bg-[#050510]/90 rounded-lg shadow-lg backdrop-blur-sm border border-white/10">
         {/* Tab navigation */}
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-white/10">
           <button
             onClick={() => setActiveTab('layers')}
             className={`flex items-center px-4 py-2 text-sm font-medium ${
               activeTab === 'layers' 
-                ? 'text-blue-600 border-b-2 border-blue-500' 
-                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                ? 'text-indigo-400 border-b-2 border-indigo-500' 
+                : 'text-white/60 hover:text-white hover:bg-white/5'
             }`}
           >
-            <FiLayout className="mr-2" size={16} />
+            <Layers className="mr-2" size={16} />
             Layers
           </button>
           <button
             onClick={() => setActiveTab('style')}
             className={`flex items-center px-4 py-2 text-sm font-medium ${
               activeTab === 'style' 
-                ? 'text-blue-600 border-b-2 border-blue-500' 
-                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                ? 'text-indigo-400 border-b-2 border-indigo-500' 
+                : 'text-white/60 hover:text-white hover:bg-white/5'
             }`}
             disabled={selectedLayerIndex < 0}
           >
@@ -923,8 +938,8 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
             onClick={() => setActiveTab('advanced')}
             className={`flex items-center px-4 py-2 text-sm font-medium ${
               activeTab === 'advanced' 
-                ? 'text-blue-600 border-b-2 border-blue-500' 
-                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                ? 'text-indigo-400 border-b-2 border-indigo-500' 
+                : 'text-white/60 hover:text-white hover:bg-white/5'
             }`}
             disabled={selectedLayerIndex < 0}
           >
@@ -940,14 +955,14 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
         
         {/* Quick actions - Add new layer button when no layers exist */}
         {layers.length === 0 && (
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-white/10">
             <button
               type="button"
               onClick={handleAddLayer}
               disabled={disabled}
-              className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              className="w-full px-4 py-2 bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
             >
-              <FiPlus className="inline mr-1" /> Add Text Layer
+              <Plus className="inline mr-1" size={16} /> Add Text Layer
             </button>
           </div>
         )}

@@ -43,7 +43,7 @@ const Home: NextPage = () => {
       },
     }),
   };
-
+  
   return (
     <div className="min-h-screen bg-[#030303] text-white">
       <Head>
@@ -95,8 +95,8 @@ const Home: NextPage = () => {
             <button className="md:hidden text-white" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
               {isMobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
             </button>
-          </div>
-        </div>
+              </div>
+            </div>
 
         {/* Mobile Menu */}
         <AnimatePresence>
@@ -189,8 +189,8 @@ const Home: NextPage = () => {
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-rose-500/[0.15] to-transparent backdrop-blur-[2px] border-2 border-white/[0.15] shadow-[0_8px_32px_0_rgba(255,255,255,0.1)] after:absolute after:inset-0 after:rounded-full after:bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.2),transparent_70%)]" />
             </motion.div>
           </motion.div>
-        </div>
-
+                </div>
+                
         <div className="relative z-10 container mx-auto px-4 md:px-6 pt-20">
           <div className="max-w-3xl mx-auto text-center">
             <motion.div
@@ -221,18 +221,18 @@ const Home: NextPage = () => {
             </motion.div>
 
             <motion.div custom={3} variants={fadeUpVariants} initial="hidden" animate="visible">
-              <button
+                  <button
                 onClick={handleGetStarted}
                 className="bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-8 py-6 text-lg rounded-full shadow-lg shadow-indigo-500/20"
               >
                 Try ProCaptions Now
-              </button>
+                  </button>
             </motion.div>
-          </div>
-        </div>
+                </div>
+              </div>
 
         <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-[#030303]/80 pointer-events-none" />
-      </div>
+            </div>
 
       {/* Video Demo Section - Using VideoSection Component */}
       <VideoSection />
@@ -249,8 +249,8 @@ const Home: NextPage = () => {
             <p className="text-white/40 max-w-2xl mx-auto">
               Creating captivating images with ProCaptions is simple and fast.
             </p>
-          </div>
-
+                </div>
+                
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -261,7 +261,7 @@ const Home: NextPage = () => {
             >
               <div className="bg-gradient-to-br from-indigo-500 to-rose-500 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-white font-bold text-xl">
                 1
-              </div>
+                              </div>
               <h3 className="text-xl font-semibold mb-2">Upload Your Image</h3>
               <p className="text-white/40">
                 Upload any image with a clear subject. Our AI automatically isolates the foreground from the background.
@@ -277,7 +277,7 @@ const Home: NextPage = () => {
             >
               <div className="bg-gradient-to-br from-indigo-500 to-rose-500 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-white font-bold text-xl">
                 2
-              </div>
+                              </div>
               <h3 className="text-xl font-semibold mb-2">Add Your Text</h3>
               <p className="text-white/40">
                 Customize your text with different fonts, sizes, and styles. Position it exactly where you want it to appear.
@@ -293,13 +293,13 @@ const Home: NextPage = () => {
             >
               <div className="bg-gradient-to-br from-indigo-500 to-rose-500 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-white font-bold text-xl">
                 3
-              </div>
+                              </div>
               <h3 className="text-xl font-semibold mb-2">Download Your Creation</h3>
               <p className="text-white/40">
                 Preview your final image with text behind the subject and download it in high resolution.
               </p>
             </motion.div>
-          </div>
+                              </div>
 
           <div className="text-center mt-12">
             <motion.button
@@ -312,8 +312,8 @@ const Home: NextPage = () => {
             >
               Get Started Now
             </motion.button>
-          </div>
-        </div>
+                      </div>
+                    </div>
       </section>
 
       {/* Testimonials Section - Using TestimonialsSection Component */}
@@ -333,14 +333,14 @@ const Home: NextPage = () => {
             <p className="text-white/40 mb-8 max-w-2xl mx-auto">
               Join thousands of creators who use ProCaptions to make stunning images with professional text effects.
             </p>
-            <button
+                  <button
               onClick={handleGetStarted}
               className="bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-8 py-4 rounded-lg shadow-lg shadow-indigo-500/20 text-lg"
-            >
+                  >
               Start Creating Now
-            </button>
-          </div>
-        </div>
+                  </button>
+                </div>
+              </div>
       </section>
 
       {/* Footer */}
@@ -370,7 +370,7 @@ const Home: NextPage = () => {
           </div>
           <div className="text-center mt-8 text-white/40 text-sm">
             &copy; {new Date().getFullYear()} ProCaptions. All rights reserved.
-          </div>
+        </div>
         </div>
       </footer>
     </div>
