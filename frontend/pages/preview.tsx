@@ -7,6 +7,7 @@ import { SegmentationResponse, AddTextResponse, ComposeResponse } from '../types
 import { addDramaticText, composeFinalImage, addMultipleTextLayers } from '../api/procaptions';
 import { FiDownload, FiArrowLeft } from 'react-icons/fi';
 import { motion } from 'framer-motion';
+import LoadingScreen from '../components/LoadingScreen';
 
 const PreviewPage: NextPage = () => {
   const router = useRouter();
@@ -218,21 +219,21 @@ const PreviewPage: NextPage = () => {
           </motion.div>
         )}
 
-        {/* Loading state */}
-        {(isProcessingText || isComposing) && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="max-w-4xl mx-auto text-center py-20"
-          >
-            <div className="inline-block animate-spin h-12 w-12 border-4 border-white/20 border-t-white rounded-full mb-4"></div>
-            <h2 className="text-xl font-medium text-white mb-2">
-              {isProcessingText ? 'Creating your dramatic text...' : 'Composing your final image...'}
-            </h2>
-            <p className="text-white/60">
-              This may take a few moments. Please wait.
-            </p>
-          </motion.div>
+        {/* Loading Screens */}
+        {isProcessingText && (
+          <LoadingScreen
+            title="Creating Your Text"
+            description="We're adding your text to the image with the perfect style and positioning."
+            fullScreen
+          />
+        )}
+
+        {isComposing && (
+          <LoadingScreen
+            title="Composing Final Image"
+            description="We're combining all elements to create your final masterpiece."
+            fullScreen
+          />
         )}
 
         {/* Result section */}

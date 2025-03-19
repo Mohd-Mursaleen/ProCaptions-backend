@@ -638,26 +638,26 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
         return selectedLayerIndex >= 0 && selectedLayerIndex < layers.length ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-white-700 mb-1">
                 Text
               </label>
               <input
                 type="text"
                 value={layers[selectedLayerIndex].text}
                 onChange={(e) => handleUpdateText(selectedLayerIndex, e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2 border bg-white/10  border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
                 placeholder="Enter text"
                 disabled={disabled}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-white-700 mb-1">
                 Font
               </label>
               <select
                 value={layers[selectedLayerIndex].style.font_name || 'anton'}
                 onChange={(e) => handleUpdateFontName(selectedLayerIndex, e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2  bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
                 disabled={disabled}
               >
                 <option value="anton">Anton</option>
@@ -666,14 +666,14 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-white-700 mb-1">
                 Font Size
               </label>
               <div className="flex items-center">
                 <button
                   type="button"
                   onClick={() => handleUpdateFontSize(selectedLayerIndex, Math.max(20, (layers[selectedLayerIndex].style.font_size || 120) - 10))}
-                  className="p-2 border border-gray-300 rounded-l-md bg-gray-50 hover:bg-gray-100"
+                  className="p-2 border border-white/20 rounded-l-md bg-white/5 hover:bg-white/10 text-white"
                   disabled={disabled}
                 >
                   <FiMinus size={16} />
@@ -682,13 +682,13 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                   type="number"
                   value={layers[selectedLayerIndex].style.font_size || 120}
                   onChange={(e) => handleUpdateFontSize(selectedLayerIndex, parseInt(e.target.value) || 120)}
-                  className="w-20 text-center border-y border-gray-300 py-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-20 text-center border-y border-white/20 py-2 bg-white/10 text-white focus:ring-indigo-500 focus:border-indigo-500"
                   disabled={disabled}
                 />
                 <button
                   type="button"
                   onClick={() => handleUpdateFontSize(selectedLayerIndex, (layers[selectedLayerIndex].style.font_size || 120) + 10)}
-                  className="p-2 border border-gray-300 rounded-r-md bg-gray-50 hover:bg-gray-100"
+                  className="p-2 border border-white/20 rounded-r-md bg-white/5 hover:bg-white/10 text-white"
                   disabled={disabled}
                 >
                   <FiPlus size={16} />
@@ -698,13 +698,14 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               
               {/* Font size presets */}
               <div className="mt-2 flex flex-wrap gap-2">
-                {[80, 100, 120, 150, 200].map(size => (
+                {[80, 100, 120, 150, 200 ,300].map(size => (
                   <button
                     key={size}
                     type="button"
                     onClick={() => handleUpdateFontSize(selectedLayerIndex, size)}
                     className={`text-xs py-1 px-2 rounded ${
-                      layers[selectedLayerIndex].style.font_size === size ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      layers[selectedLayerIndex].style.font_size === size ? "bg-indigo-500/30 text-white border border-indigo-500/50"
+                        : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
                     }`}
                     disabled={disabled}
                   >
@@ -714,7 +715,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-white-700 mb-1">
                 Text Color
               </label>
               <div className="flex items-center">

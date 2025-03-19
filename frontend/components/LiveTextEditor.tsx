@@ -617,7 +617,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
 
               {/* Font size presets */}
               <div className="mt-2 flex flex-wrap gap-2">
-                {[100, 150, 200, 250, 300].map((size) => (
+                {[100, 150, 200, 250, 300, 350].map((size) => (
                   <button
                     key={size}
                     type="button"

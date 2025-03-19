@@ -8,6 +8,7 @@ import { segmentImage } from '../api/procaptions';
 import ImageUploader from '../components/ImageUploader';
 import { FiArrowRight } from 'react-icons/fi';
 import { motion } from 'framer-motion';
+import LoadingScreen from '../components/LoadingScreen';
 
 const UploadPage: NextPage = () => {
   const router = useRouter();
@@ -140,6 +141,15 @@ const UploadPage: NextPage = () => {
               </div>
             </div>
           </motion.div>
+        )}
+
+        {/* Loading Screen */}
+        {isUploading && (
+          <LoadingScreen
+            title="Processing Your Image"
+            description="We're analyzing your image and preparing it for text editing."
+            fullScreen
+          />
         )}
 
         {/* Upload section */}
