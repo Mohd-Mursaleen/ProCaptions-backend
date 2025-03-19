@@ -19,6 +19,8 @@ interface LiveTextEditorProps {
   onWithPeriodChange: (withPeriod: boolean) => void
   position: Position
   onPositionChange: (position: Position) => void
+  fontColor: string
+  onFontColorChange: (color: string) => void
   disabled: boolean
 }
 
@@ -100,6 +102,8 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   onWithPeriodChange,
   position,
   onPositionChange,
+  fontColor,
+  onFontColorChange,
   disabled,
 }) => {
   const [localText, setLocalText] = useState(text)
@@ -475,7 +479,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
       fontSize: `${previewFontSize}px`,
       lineHeight: "1",
       fontWeight: fontName === "arial_bold" || fontName === "helvetica_bold" ? "bold" : "normal",
-      color: "#FFFFFF",
+      color: fontColor,
       textShadow: "2px 2px 8px rgba(0, 0, 0, 0.5)",
       cursor: isDraggingText ? "grabbing" : "grab",
       position: "absolute" as const,
@@ -511,6 +515,11 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
         <div className="absolute w-2 h-2 rounded-full bg-indigo-400 border border-indigo-600 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-glow"></div>
       </div>
     )
+  }
+
+  // Update the font color change handler to use the prop
+  const handleFontColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onFontColorChange(e.target.value)
   }
 
   // Tab navigation
@@ -572,6 +581,27 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                 <label htmlFor="with-period" className="ml-2 block text-sm text-white/80">
                   Add period at the end
                 </label>
+              </div>
+              
+            </div>
+
+            <div>
+              <label htmlFor="font-color" className="block text-sm font-medium text-white/80 mb-1">
+                Font Color
+              </label>
+              <div className="flex items-center">
+                <div
+                  className="w-8 h-8 rounded border border-white/20 mr-2"
+                  style={{ backgroundColor: fontColor }}
+                ></div>
+                <input
+                  id="font-color"
+                  type="color"
+                  value={fontColor}
+                  onChange={handleFontColorChange}
+                  className="h-8 w-8 rounded bg-transparent"
+                  disabled={disabled}
+                />
               </div>
             </div>
           </div>

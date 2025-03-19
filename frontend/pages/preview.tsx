@@ -86,7 +86,8 @@ const PreviewPage: NextPage = () => {
           position: txtSettings.position,
           fontSize: txtSettings.fontSize,
           fontName: txtSettings.fontName,
-          withPeriod: txtSettings.withPeriod
+          withPeriod: txtSettings.withPeriod,
+          fontColor: txtSettings.fontColor
         });
         
         textResult = await addDramaticText({
@@ -96,6 +97,7 @@ const PreviewPage: NextPage = () => {
           font_size: txtSettings.fontSize,
           font_name: txtSettings.fontName,
           with_period: txtSettings.withPeriod,
+          color: txtSettings.fontColor
         });
       }
       

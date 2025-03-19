@@ -21,6 +21,7 @@ const EditPage: NextPage = () => {
   const [fontSize, setFontSize] = useState<number>(150);
   const [fontName, setFontName] = useState<string>('anton');
   const [withPeriod, setWithPeriod] = useState<boolean>(true);
+  const [fontColor, setFontColor] = useState<string>('#FFFFFF');
   
   // Multi-layer text settings
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
@@ -104,7 +105,7 @@ const EditPage: NextPage = () => {
     // Store the text settings in localStorage
     const textSettings = useMultiLayer 
       ? { textLayers, useMultiLayer }
-      : { text, position, fontSize, fontName, withPeriod, useMultiLayer };
+      : { text, position, fontSize, fontName, withPeriod, fontColor, useMultiLayer };
     
     localStorage.setItem('textSettings', JSON.stringify(textSettings));
     
@@ -250,6 +251,8 @@ const EditPage: NextPage = () => {
                   onFontNameChange={setFontName}
                   withPeriod={withPeriod}
                   onWithPeriodChange={setWithPeriod}
+                  fontColor={fontColor}
+                  onFontColorChange={setFontColor}
                   disabled={false}
                 />
               )}
