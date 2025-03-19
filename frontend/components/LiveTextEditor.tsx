@@ -194,6 +194,25 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     }
   }, [localText, fontSize, fontName, withPeriod]);
   
+  // Add window resize listener to handle responsive positioning
+  useEffect(() => {
+    const handleResize = () => {
+      // Force recalculation of preview dimensions and positions when window resizes
+      if (imageRef.current && originalImageDimensions) {
+        console.log('Window resized - recalculating positions');
+        
+        // Trigger a rerender to update preview position
+        setTextDimensions({
+          width: textLayerRef.current?.offsetWidth || 0,
+          height: textLayerRef.current?.offsetHeight || 0
+        });
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [originalImageDimensions]);
+  
   // Handle text change
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newText = e.target.value;
@@ -253,7 +272,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     }
   };
   
-  // Calculate the scaling factor between preview and original image
+  // Improved: Calculate the scaling factor between preview and original image
   const getScalingFactor = (): number => {
     if (!previewRef.current || !originalImageDimensions || !imageRef.current) {
       return 1; // Default to 1 if we don't have dimensions yet
@@ -265,17 +284,25 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     return originalWidth / previewWidth;
   };
   
-  // Convert preview coordinates to original image coordinates
+  // Improved: Convert preview coordinates to original image coordinates using percentages
   const previewToOriginalCoordinates = (previewX: number, previewY: number): Position => {
     if (!originalImageDimensions || !imageRef.current) {
       return { x: previewX, y: previewY };
     }
     
-    const scale = getScalingFactor();
-    const origX = Math.round(previewX * scale);
-    const origY = Math.round(previewY * scale);
+    // Get current dimensions of the preview image
+    const previewWidth = imageRef.current.clientWidth;
+    const previewHeight = imageRef.current.clientHeight;
     
-    console.log(`Converting preview (${previewX}, ${previewY}) to original: (${origX}, ${origY}) with scale: ${scale.toFixed(2)}`);
+    // Convert to percentages (0-100) relative to the preview dimensions
+    const percentX = (previewX / previewWidth) * 100;
+    const percentY = (previewY / previewHeight) * 100;
+    
+    // Convert percentages to pixels in the original image
+    const origX = Math.round((percentX / 100) * originalImageDimensions.width);
+    const origY = Math.round((percentY / 100) * originalImageDimensions.height);
+    
+    console.log(`Converting preview (${previewX}, ${previewY}) to original: (${origX}, ${origY}) [${percentX.toFixed(2)}%, ${percentY.toFixed(2)}%]`);
     
     return {
       x: origX,
@@ -283,17 +310,25 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     };
   };
   
-  // Convert original image coordinates to preview coordinates
+  // Improved: Convert original image coordinates to preview coordinates using percentages
   const originalToPreviewCoordinates = (originalX: number, originalY: number): Position => {
     if (!originalImageDimensions || !imageRef.current) {
       return { x: originalX, y: originalY };
     }
     
-    const scale = getScalingFactor();
-    const previewX = Math.round(originalX / scale);
-    const previewY = Math.round(originalY / scale);
+    // Get current dimensions of the preview image
+    const previewWidth = imageRef.current.clientWidth;
+    const previewHeight = imageRef.current.clientHeight;
     
-    console.log(`Converting original (${originalX}, ${originalY}) to preview: (${previewX}, ${previewY}) with scale: ${scale.toFixed(2)}`);
+    // Convert to percentages (0-100) relative to the original dimensions
+    const percentX = (originalX / originalImageDimensions.width) * 100;
+    const percentY = (originalY / originalImageDimensions.height) * 100;
+    
+    // Convert percentages to pixels in the preview
+    const previewX = Math.round((percentX / 100) * previewWidth);
+    const previewY = Math.round((percentY / 100) * previewHeight);
+    
+    console.log(`Converting original (${originalX}, ${originalY}) to preview: (${previewX}, ${previewY}) [${percentX.toFixed(2)}%, ${percentY.toFixed(2)}%]`);
     
     return {
       x: previewX,
@@ -715,9 +750,9 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   };
   
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
-      {/* Preview Panel - Left Side */}
-      <div className="w-full lg:w-7/12">
+    <div className="flex flex-col lg:flex-row gap-4">
+      {/* Preview Panel - More compact layout */}
+      <div className="w-full lg:w-3/5 xl:w-7/12">
         <div className="sticky top-4">
           <div className="mb-2 flex justify-between items-center">
             <h3 className="text-md font-medium text-gray-700">Text Preview</h3>
@@ -731,6 +766,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
             className="relative w-full bg-gray-800 rounded-lg overflow-hidden shadow-md"
             onClick={handleCanvasClick}
             onMouseUp={handlePreviewMouseUp}
+            style={{ maxHeight: 'calc(100vh - 220px)' }}
           >
             {backgroundImage ? (
               <>
@@ -767,12 +803,14 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                 {originalImageDimensions && (
                   <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs p-1 rounded">
                     Position: {position.x}, {position.y} | 
-                    Size: {fontSize}px
+                    Size: {fontSize}px | 
+                    {((position.x / originalImageDimensions.width) * 100).toFixed(1)}%, 
+                    {((position.y / originalImageDimensions.height) * 100).toFixed(1)}%
                   </div>
                 )}
               </>
             ) : (
-              <div className="w-full h-64 flex items-center justify-center text-gray-400">
+              <div className="w-full h-60 flex items-center justify-center text-gray-400">
                 Upload an image to preview text
               </div>
             )}
@@ -780,13 +818,13 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
         </div>
       </div>
       
-      {/* Controls Panel - Right Side */}
-      <div className="w-full lg:w-5/12 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        {/* Tabs Navigation */}
-        <div className="flex border-b border-gray-200">
+      {/* Controls Panel - More compact and adaptive */}
+      <div className="w-full lg:w-2/5 xl:w-5/12 bg-white rounded-lg border border-gray-200 shadow-sm overflow-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+        {/* Tabs Navigation - Horizontal scrolling on small screens */}
+        <div className="flex border-b border-gray-200 overflow-x-auto">
           <button
             onClick={() => setActiveTab('text')}
-            className={`flex items-center px-4 py-3 text-sm font-medium ${
+            className={`flex items-center px-4 py-2 text-sm font-medium whitespace-nowrap ${
               activeTab === 'text' 
                 ? 'text-blue-600 border-b-2 border-blue-500' 
                 : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
@@ -797,7 +835,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('style')}
-            className={`flex items-center px-4 py-3 text-sm font-medium ${
+            className={`flex items-center px-4 py-2 text-sm font-medium whitespace-nowrap ${
               activeTab === 'style' 
                 ? 'text-blue-600 border-b-2 border-blue-500' 
                 : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
@@ -808,7 +846,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('advanced')}
-            className={`flex items-center px-4 py-3 text-sm font-medium ${
+            className={`flex items-center px-4 py-2 text-sm font-medium whitespace-nowrap ${
               activeTab === 'advanced' 
                 ? 'text-blue-600 border-b-2 border-blue-500' 
                 : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
@@ -820,7 +858,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
         </div>
         
         {/* Tab Content */}
-        <div className="p-4">
+        <div className="p-3">
           {renderTabContent()}
         </div>
       </div>

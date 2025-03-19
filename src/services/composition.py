@@ -50,6 +50,18 @@ class CompositionService:
                 "angle": 45,  # degrees
                 "distance": 2,
                 "color_gradient": ["#333333", "#666666", "#999999"]
+            },
+            "text_gradient": {
+                "colors": ["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"],
+                "direction": "horizontal",  # horizontal, vertical, diagonal
+                "use_mask": True  # Use text as mask for gradient
+            },
+            "background_gradient": {
+                "colors": ["#FF000088", "#0000FF88"],  # With alpha channel for transparency
+                "direction": "vertical",
+                "padding": 10,  # Padding around text in pixels
+                "radius": 0,  # Border radius for the background
+                "opacity": 0.7  # Overall opacity of the background
             }
         }
 
@@ -121,6 +133,8 @@ class CompositionService:
             outline = effects.get('outline', None)
             glow = effects.get('glow', None)
             depth_3d = effects.get('3d_depth', None)
+            text_gradient = effects.get('text_gradient', None)
+            background_gradient = effects.get('background_gradient', None)
             
             # Apply 3D depth effect
             if depth_3d:
@@ -255,8 +269,277 @@ class CompositionService:
                     logging.error(f"Error applying outline effect: {str(e)}")
                     # Continue with main text
             
-            # Draw the main text on top
-            draw.text(position, text, fill=color, font=font)
+            # Apply text gradient if specified
+            if text_gradient:
+                try:
+                    preset = self.effect_presets['text_gradient']
+                    gradient_colors = text_gradient.get('colors', preset['colors'])
+                    gradient_direction = text_gradient.get('direction', preset['direction'])
+                    use_mask = text_gradient.get('use_mask', preset['use_mask'])
+                    
+                    # Get text dimensions
+                    text_bbox = draw.textbbox(position, text, font=font)
+                    text_width = text_bbox[2] - text_bbox[0]
+                    text_height = text_bbox[3] - text_bbox[1]
+                    
+                    # Create a mask image with the text
+                    mask_img = Image.new('RGBA', draw.im.size, (0, 0, 0, 0))
+                    mask_draw = ImageDraw.Draw(mask_img)
+                    mask_draw.text(position, text, fill=(255, 255, 255, 255), font=font)
+                    mask_array = np.array(mask_img)
+                    
+                    # Create a gradient image sized to the text
+                    gradient_img = Image.new('RGBA', draw.im.size, (0, 0, 0, 0))
+                    gradient_draw = ImageDraw.Draw(gradient_img)
+                    
+                    # Create gradient array
+                    if gradient_direction == 'horizontal':
+                        # Create horizontal gradient
+                        for i in range(text_width):
+                            # Calculate normalized position in gradient
+                            pos = i / max(1, text_width - 1)
+                            color_idx = pos * (len(gradient_colors) - 1)
+                            
+                            # Get interpolated color
+                            idx_floor = int(color_idx)
+                            idx_ceil = min(idx_floor + 1, len(gradient_colors) - 1)
+                            
+                            # Get the two colors to interpolate between
+                            color1 = self._hex_to_rgba(gradient_colors[idx_floor])
+                            color2 = self._hex_to_rgba(gradient_colors[idx_ceil])
+                            
+                            # Calculate blend factor
+                            blend = color_idx - idx_floor
+                            
+                            # Interpolate colors
+                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
+                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
+                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
+                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
+                            
+                            # Draw a vertical line of this color
+                            x_pos = position[0] + i
+                            for j in range(text_height):
+                                y_pos = position[1] + j
+                                if 0 <= x_pos < draw.im.width and 0 <= y_pos < draw.im.height:
+                                    gradient_img.putpixel((x_pos, y_pos), (r, g, b, a))
+                                    
+                    elif gradient_direction == 'vertical':
+                        # Create vertical gradient
+                        for j in range(text_height):
+                            # Calculate normalized position in gradient
+                            pos = j / max(1, text_height - 1)
+                            color_idx = pos * (len(gradient_colors) - 1)
+                            
+                            # Get interpolated color
+                            idx_floor = int(color_idx)
+                            idx_ceil = min(idx_floor + 1, len(gradient_colors) - 1)
+                            
+                            # Get the two colors to interpolate between
+                            color1 = self._hex_to_rgba(gradient_colors[idx_floor])
+                            color2 = self._hex_to_rgba(gradient_colors[idx_ceil])
+                            
+                            # Calculate blend factor
+                            blend = color_idx - idx_floor
+                            
+                            # Interpolate colors
+                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
+                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
+                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
+                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
+                            
+                            # Draw a horizontal line of this color
+                            y_pos = position[1] + j
+                            for i in range(text_width):
+                                x_pos = position[0] + i
+                                if 0 <= x_pos < draw.im.width and 0 <= y_pos < draw.im.height:
+                                    gradient_img.putpixel((x_pos, y_pos), (r, g, b, a))
+                    else:  # diagonal
+                        # Create diagonal gradient
+                        for i in range(text_width):
+                            for j in range(text_height):
+                                # Calculate normalized position in gradient (diagonal)
+                                pos = (i / max(1, text_width - 1) + j / max(1, text_height - 1)) / 2
+                                color_idx = pos * (len(gradient_colors) - 1)
+                                
+                                # Get interpolated color
+                                idx_floor = int(color_idx)
+                                idx_ceil = min(idx_floor + 1, len(gradient_colors) - 1)
+                                
+                                # Get the two colors to interpolate between
+                                color1 = self._hex_to_rgba(gradient_colors[idx_floor])
+                                color2 = self._hex_to_rgba(gradient_colors[idx_ceil])
+                                
+                                # Calculate blend factor
+                                blend = color_idx - idx_floor
+                                
+                                # Interpolate colors
+                                r = int(color1[0] * (1 - blend) + color2[0] * blend)
+                                g = int(color1[1] * (1 - blend) + color2[1] * blend)
+                                b = int(color1[2] * (1 - blend) + color2[2] * blend)
+                                a = int(color1[3] * (1 - blend) + color2[3] * blend)
+                                
+                                # Set pixel color
+                                x_pos = position[0] + i
+                                y_pos = position[1] + j
+                                if 0 <= x_pos < draw.im.width and 0 <= y_pos < draw.im.height:
+                                    gradient_img.putpixel((x_pos, y_pos), (r, g, b, a))
+                    
+                    # Apply the gradient with the text mask
+                    if use_mask:
+                        # Use text as mask for the gradient
+                        gradient_array = np.array(gradient_img)
+                        # Only keep gradient where mask is non-zero
+                        gradient_array[:, :, 3] = np.minimum(gradient_array[:, :, 3], mask_array[:, :, 3])
+                        # Paste the masked gradient
+                        draw.im.paste(Image.fromarray(gradient_array), (0, 0), Image.fromarray(mask_array))
+                    else:
+                        # Just draw the gradient directly (less precise)
+                        draw.text(position, text, fill=None, font=font, embedded_color=True)
+                except Exception as e:
+                    logging.error(f"Error applying text gradient: {str(e)}")
+                    # Fall back to regular text
+                    draw.text(position, text, fill=color, font=font)
+            # Apply background gradient if specified
+            elif background_gradient:
+                try:
+                    preset = self.effect_presets['background_gradient']
+                    bg_colors = background_gradient.get('colors', preset['colors'])
+                    bg_direction = background_gradient.get('direction', preset['direction'])
+                    padding = background_gradient.get('padding', preset['padding'])
+                    radius = background_gradient.get('radius', preset['radius'])
+                    opacity = background_gradient.get('opacity', preset['opacity'])
+                    
+                    # Get text dimensions
+                    text_bbox = draw.textbbox(position, text, font=font)
+                    
+                    # Add padding
+                    x1 = text_bbox[0] - padding
+                    y1 = text_bbox[1] - padding
+                    x2 = text_bbox[2] + padding
+                    y2 = text_bbox[3] + padding
+                    
+                    # Ensure within image bounds
+                    x1 = max(0, x1)
+                    y1 = max(0, y1)
+                    x2 = min(draw.im.width, x2)
+                    y2 = min(draw.im.height, y2)
+                    
+                    bg_width = x2 - x1
+                    bg_height = y2 - y1
+                    
+                    # Create background gradient image
+                    bg_img = Image.new('RGBA', (bg_width, bg_height), (0, 0, 0, 0))
+                    bg_draw = ImageDraw.Draw(bg_img)
+                    
+                    # Draw background with gradient
+                    if bg_direction == 'horizontal':
+                        for i in range(bg_width):
+                            # Calculate color position
+                            pos = i / max(1, bg_width - 1)
+                            color_idx = pos * (len(bg_colors) - 1)
+                            
+                            # Interpolate colors
+                            idx_floor = int(color_idx)
+                            idx_ceil = min(idx_floor + 1, len(bg_colors) - 1)
+                            
+                            color1 = self._hex_to_rgba(bg_colors[idx_floor])
+                            color2 = self._hex_to_rgba(bg_colors[idx_ceil])
+                            
+                            blend = color_idx - idx_floor
+                            
+                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
+                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
+                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
+                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
+                            
+                            # Adjust for overall opacity
+                            a = int(a * opacity)
+                            
+                            # Draw vertical line
+                            bg_draw.line([(i, 0), (i, bg_height)], fill=(r, g, b, a))
+                    elif bg_direction == 'vertical':
+                        for j in range(bg_height):
+                            # Calculate color position
+                            pos = j / max(1, bg_height - 1)
+                            color_idx = pos * (len(bg_colors) - 1)
+                            
+                            # Interpolate colors
+                            idx_floor = int(color_idx)
+                            idx_ceil = min(idx_floor + 1, len(bg_colors) - 1)
+                            
+                            color1 = self._hex_to_rgba(bg_colors[idx_floor])
+                            color2 = self._hex_to_rgba(bg_colors[idx_ceil])
+                            
+                            blend = color_idx - idx_floor
+                            
+                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
+                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
+                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
+                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
+                            
+                            # Adjust for overall opacity
+                            a = int(a * opacity)
+                            
+                            # Draw horizontal line
+                            bg_draw.line([(0, j), (bg_width, j)], fill=(r, g, b, a))
+                    else:  # radial
+                        # Center of the background box
+                        center_x = bg_width // 2
+                        center_y = bg_height // 2
+                        max_dist = math.sqrt(center_x**2 + center_y**2)
+                        
+                        for i in range(bg_width):
+                            for j in range(bg_height):
+                                # Calculate distance from center (normalized)
+                                dist = math.sqrt((i - center_x)**2 + (j - center_y)**2) / max_dist
+                                color_idx = dist * (len(bg_colors) - 1)
+                                
+                                # Interpolate colors
+                                idx_floor = int(color_idx)
+                                idx_ceil = min(idx_floor + 1, len(bg_colors) - 1)
+                                
+                                color1 = self._hex_to_rgba(bg_colors[idx_floor])
+                                color2 = self._hex_to_rgba(bg_colors[idx_ceil])
+                                
+                                blend = color_idx - idx_floor
+                                
+                                r = int(color1[0] * (1 - blend) + color2[0] * blend)
+                                g = int(color1[1] * (1 - blend) + color2[1] * blend)
+                                b = int(color1[2] * (1 - blend) + color2[2] * blend)
+                                a = int(color1[3] * (1 - blend) + color2[3] * blend)
+                                
+                                # Adjust for overall opacity
+                                a = int(a * opacity)
+                                
+                                # Set pixel
+                                bg_img.putpixel((i, j), (r, g, b, a))
+                    
+                    # Apply rounded corners if specified
+                    if radius > 0:
+                        # Create a mask with rounded corners
+                        mask = Image.new('L', (bg_width, bg_height), 0)
+                        mask_draw = ImageDraw.Draw(mask)
+                        mask_draw.rounded_rectangle([(0, 0), (bg_width-1, bg_height-1)], radius=radius, fill=255)
+                        
+                        # Apply mask to background
+                        bg_array = np.array(bg_img)
+                        mask_array = np.array(mask)
+                        bg_array[:, :, 3] = bg_array[:, :, 3] * mask_array / 255
+                        bg_img = Image.fromarray(bg_array)
+                    
+                    # Paste background onto main image
+                    draw.im.paste(bg_img, (x1, y1), bg_img)
+                    
+                    # Draw the text
+                    draw.text(position, text, fill=color, font=font)
+                except Exception as e:
+                    logging.error(f"Error applying background gradient: {str(e)}")
+                    # Fall back to regular text
+                    draw.text(position, text, fill=color, font=font)
+            else:
+                # Draw the main text on top (no special effects)
+                draw.text(position, text, fill=color, font=font)
             
         except Exception as e:
             logging.error(f"Error in _apply_text_effects: {str(e)}")
@@ -268,6 +551,42 @@ class CompositionService:
                 default_font = ImageFont.load_default()
                 draw.text(position, text, fill="#FFFFFF", font=default_font)
 
+    def _hex_to_rgba(self, hex_color: str) -> Tuple[int, int, int, int]:
+        """Convert hex color to RGBA tuple"""
+        # Handle colors with alpha in hex format (#RRGGBBAA)
+        if hex_color.startswith('#'):
+            hex_color = hex_color.lstrip('#')
+            
+            # Handle different hex formats
+            if len(hex_color) == 8:  # #RRGGBBAA
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                a = int(hex_color[6:8], 16)
+            elif len(hex_color) == 6:  # #RRGGBB
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                a = 255
+            elif len(hex_color) == 4:  # #RGBA
+                r = int(hex_color[0], 16) * 17
+                g = int(hex_color[1], 16) * 17
+                b = int(hex_color[2], 16) * 17
+                a = int(hex_color[3], 16) * 17
+            elif len(hex_color) == 3:  # #RGB
+                r = int(hex_color[0], 16) * 17
+                g = int(hex_color[1], 16) * 17
+                b = int(hex_color[2], 16) * 17
+                a = 255
+            else:
+                # Default to white fully opaque if invalid format
+                r, g, b, a = 255, 255, 255, 255
+        else:
+            # Default to white fully opaque if not hex format
+            r, g, b, a = 255, 255, 255, 255
+            
+        return (r, g, b, a)
+    
     def _suggest_text_positions(
         self, 
         background: Image.Image, 

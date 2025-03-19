@@ -110,6 +110,61 @@ class Text3DEffectRequest(BaseModel):
     effect_type: str = "3d_depth"  # 3d_depth, shadow, glow, outline
     effect_settings: Dict[str, Any] = None
 
+class TextGradientRequest(BaseModel):
+    background_path: str
+    text: str
+    position: Dict[str, int]
+    font_size: int = 120
+    font_name: str = "anton"
+    colors: List[str] = ["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"]
+    direction: str = "horizontal"  # horizontal, vertical, diagonal
+    use_mask: bool = True
+    
+    @validator('colors')
+    def validate_colors(cls, v):
+        if not v or len(v) < 2:
+            return ["#FF0000", "#0000FF"]  # Default red to blue gradient
+        return v
+    
+    @validator('direction')
+    def validate_direction(cls, v):
+        valid_directions = ["horizontal", "vertical", "diagonal"]
+        if v not in valid_directions:
+            return "horizontal"
+        return v
+
+class BackgroundGradientRequest(BaseModel):
+    background_path: str
+    text: str
+    position: Dict[str, int]
+    font_size: int = 120
+    font_name: str = "anton"
+    color: str = "#FFFFFF"  # Text color
+    bg_colors: List[str] = ["#FF000088", "#0000FF88"]  # Background colors with alpha
+    bg_direction: str = "vertical"  # horizontal, vertical, radial
+    padding: int = 10
+    radius: int = 10  # Border radius for rounded corners
+    opacity: float = 0.7
+    
+    @validator('bg_colors')
+    def validate_colors(cls, v):
+        if not v or len(v) < 2:
+            return ["#00000088", "#00000044"]  # Default black gradient with transparency
+        return v
+    
+    @validator('bg_direction')
+    def validate_direction(cls, v):
+        valid_directions = ["horizontal", "vertical", "radial"]
+        if v not in valid_directions:
+            return "vertical"
+        return v
+    
+    @validator('opacity')
+    def validate_opacity(cls, v):
+        if v is None or v < 0 or v > 1:
+            return 0.7
+        return v
+
 class BlendComposeRequest(BaseModel):
     background_with_text_path: str
     foreground_path: str
@@ -417,6 +472,66 @@ async def add_3d_text(request: Text3DEffectRequest) -> Dict[str, str]:
         return {"image_with_text": info["cloud_url"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add 3D text: {str(e)}")
+
+@router.post("/add-text-with-gradient", response_model=TextResponse)
+async def add_text_with_gradient(request: TextGradientRequest) -> Dict[str, str]:
+    """Add text with gradient effect to a background image"""
+    try:
+        # Configure text gradient effect
+        gradient_effect = {
+            'text_gradient': {
+                'colors': request.colors,
+                'direction': request.direction,
+                'use_mask': request.use_mask
+            }
+        }
+        
+        # Call composition service with the gradient effect
+        result_image, info = await composition_service.add_text(
+            request.background_path,
+            request.text,
+            request.position,
+            request.font_size,
+            "#FFFFFF",  # Color is ignored for gradient text
+            request.font_name,
+            gradient_effect
+        )
+        
+        return {"image_with_text": info["cloud_url"]}
+    except Exception as e:
+        logger.error(f"Failed to add gradient text: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add gradient text: {str(e)}")
+
+@router.post("/add-text-with-bg-gradient", response_model=TextResponse)
+async def add_text_with_background_gradient(request: BackgroundGradientRequest) -> Dict[str, str]:
+    """Add text with a gradient background to an image"""
+    try:
+        # Configure background gradient effect
+        bg_gradient_effect = {
+            'background_gradient': {
+                'colors': request.bg_colors,
+                'direction': request.bg_direction,
+                'padding': request.padding,
+                'radius': request.radius,
+                'opacity': request.opacity
+            }
+        }
+        
+        # Call composition service with the background gradient effect
+        result_image, info = await composition_service.add_text(
+            request.background_path,
+            request.text,
+            request.position,
+            request.font_size,
+            request.color,  # Text color
+            request.font_name,
+            bg_gradient_effect
+        )
+        
+        return {"image_with_text": info["cloud_url"]}
+    except Exception as e:
+        logger.error(f"Failed to add text with background gradient: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add text with background gradient: {str(e)}")
 
 @router.post("/compose-with-blend")
 async def compose_with_blend(request: BlendComposeRequest) -> Dict[str, str]:
