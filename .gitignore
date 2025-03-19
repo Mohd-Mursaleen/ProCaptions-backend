@@ -27,7 +27,7 @@ frontend/node_modules/
 out/
 build/
 models/
-
+hero-geometric/
 # Project specific
 uploads/
 assets/fonts/

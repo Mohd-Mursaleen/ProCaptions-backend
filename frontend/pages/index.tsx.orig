@@ -20,12 +20,7 @@ const Home: NextPage = () => {
   }, []);
 
   const handleGetStarted = () => {
-    console.log('Navigating to upload page...');
-    // Use both methods for redundancy
-    router.push('/upload').catch(err => {
-      console.error('Router navigation failed, using fallback:', err);
-      window.location.href = '/upload';
-    });
+    router.push('/upload');
   };
 
   const fadeUpVariants = {
@@ -379,54 +374,6 @@ const Home: NextPage = () => {
               className="bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-6 py-3 rounded-lg shadow-lg shadow-indigo-500/20"
             >
               Get Started Now
-            </motion.button>
-          </div>
-        </div>
-      </section>
-
-      {/* Examples Section */}
-      <section id="examples" className="py-24 relative">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-rose-300">
-              See It In Action
-            </h2>
-            <p className="text-white/40 max-w-2xl mx-auto">
-              Check out some examples of what you can create with ProCaptions.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3].map((item) => (
-              <motion.div 
-                key={item}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: item * 0.1 }}
-                viewport={{ once: true }}
-                className="bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden"
-              >
-                <div className="aspect-video bg-gradient-to-br from-indigo-900/30 to-rose-900/30 flex items-center justify-center">
-                  <div className="text-xl text-white/50">Example Image {item}</div>
-                </div>
-                <div className="p-4">
-                  <h3 className="text-lg font-medium mb-1">Design Style {item}</h3>
-                  <p className="text-white/40 text-sm">Create professional poster designs effortlessly</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              viewport={{ once: true }}
-              onClick={handleGetStarted}
-              className="bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-6 py-3 rounded-lg shadow-lg shadow-indigo-500/20"
-            >
-              Create Your Own
             </motion.button>
           </div>
         </div>
