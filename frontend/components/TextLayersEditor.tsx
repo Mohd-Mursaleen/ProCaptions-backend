@@ -739,89 +739,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
           </div>
         );
       
-      case "advanced":
-        return selectedLayerIndex >= 0 && selectedLayerIndex < layers.length ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Text Effect
-              </label>
-              <select
-                value={getCurrentEffectType(layers[selectedLayerIndex])}
-                onChange={(e) => handleUpdateEffectType(selectedLayerIndex, e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
-                disabled={disabled}
-              >
-                {EFFECT_TYPES.map((effect) => (
-                  <option key={effect.value} value={effect.value}>
-                    {effect.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Position
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label htmlFor="position-x" className="text-xs text-gray-500">X Position</label>
-                  <input
-                    type="number"
-                    value={layers[selectedLayerIndex].position.x}
-                    onChange={(e) => handleUpdatePosition(selectedLayerIndex, { 
-                      ...layers[selectedLayerIndex].position, 
-                      x: parseInt(e.target.value) || 0 
-                    })}
-                    className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm"
-                    disabled={disabled}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="position-y" className="text-xs text-gray-500">Y Position</label>
-                  <input
-                    type="number"
-                    value={layers[selectedLayerIndex].position.y}
-                    onChange={(e) => handleUpdatePosition(selectedLayerIndex, { 
-                      ...layers[selectedLayerIndex].position, 
-                      y: parseInt(e.target.value) || 0 
-                    })}
-                    className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm text-sm"
-                    disabled={disabled}
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleCenterText}
-                className="mt-2 flex items-center justify-center w-full py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm"
-                title="Center text in image"
-                disabled={disabled}
-              >
-                <MdCenterFocusStrong size={16} className="mr-1" />
-                Center Text
-              </button>
-            </div>
-            
-            {/* Position info */}
-            {originalImageDimensions && (
-              <div className="p-2 bg-gray-50 rounded-md text-xs text-gray-600">
-                <div>Image Size: {originalImageDimensions.width} × {originalImageDimensions.height}px</div>
-                <div>
-                  Position: {layers[selectedLayerIndex].position.x}, {layers[selectedLayerIndex].position.y}px 
-                  ({((layers[selectedLayerIndex].position.x / originalImageDimensions.width) * 100).toFixed(1)}%, 
-                  {((layers[selectedLayerIndex].position.y / originalImageDimensions.height) * 100).toFixed(1)}%)
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center py-6 text-gray-500">
-            <p>Select a layer first to access advanced settings</p>
-          </div>
-        );
-        
+       
       default:
         return null;
     }
@@ -935,18 +853,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
             <FiType className="mr-2" size={16} />
             Style
           </button>
-          <button
-            onClick={() => setActiveTab('advanced')}
-            className={`flex items-center px-4 py-2 text-sm font-medium ${
-              activeTab === 'advanced' 
-                ? 'text-indigo-400 border-b-2 border-indigo-500' 
-                : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
-            disabled={selectedLayerIndex < 0}
-          >
-            <FiSettings className="mr-2" size={16} />
-            Advanced
-          </button>
+          
         </div>
         
         {/* Tab content */}

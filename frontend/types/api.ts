@@ -73,7 +73,7 @@ export interface ComposeRequest {
 
 // Compose Response
 export interface ComposeResponse {
-  final_image: string;
+  composed_image: string;
 }
 
 // Text Metrics
@@ -136,7 +136,9 @@ export interface TextLayerStyle {
 export interface TextLayer {
   text: string;
   position: Position;
-  style: TextLayerStyle;
+  font_size?: number;
+  color?: string;
+  font_name?: string;
 }
 
 // Multiple Text Layers Request

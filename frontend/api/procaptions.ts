@@ -1,11 +1,8 @@
 import axios from 'axios';
 import {
   SegmentationResponse,
-  AddTextRequest,
   AddDramaticTextRequest,
   AddTextResponse,
-  FontSizeRequest,
-  FontSizeResponse,
   ComposeRequest,
   ComposeResponse,
   MultiLayerTextRequest,
@@ -18,7 +15,7 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
   // Increase timeout for image processing operations
-  timeout: 300000, // 5 minutes (increased from 2 minutes)
+  timeout: 300000, // 5 minutes
 });
 
 // Generic error handler for API calls
@@ -30,14 +27,10 @@ const handleApiError = (error: any) => {
   }
   
   if (error.response) {
-    // The request was made and the server responded with a status code
-    // that falls out of the range of 2xx
     throw new Error(error.response.data?.detail || 'Server error. Please try again.');
   } else if (error.request) {
-    // The request was made but no response was received
     throw new Error('No response from server. Please check your connection and try again.');
   } else {
-    // Something happened in setting up the request that triggered an Error
     throw new Error('Failed to make request. Please try again.');
   }
 };
@@ -68,30 +61,10 @@ export const segmentImage = async (file: File): Promise<SegmentationResponse> =>
   }
 };
 
-// API function to add standard text
-export const addText = async (request: AddTextRequest): Promise<AddTextResponse> => {
-  try {
-    const response = await apiClient.post<AddTextResponse>('/api/add-text', request);
-    return response.data;
-  } catch (error) {
-    return handleApiError(error);
-  }
-};
-
 // API function to add dramatic text
 export const addDramaticText = async (request: AddDramaticTextRequest): Promise<AddTextResponse> => {
   try {
     const response = await apiClient.post<AddTextResponse>('/api/add-dramatic-text', request);
-    return response.data;
-  } catch (error) {
-    return handleApiError(error);
-  }
-};
-
-// API function to get font size suggestions and previews
-export const getFontSizeSuggestions = async (request: FontSizeRequest): Promise<FontSizeResponse> => {
-  try {
-    const response = await apiClient.post<FontSizeResponse>('/api/font-size-suggestions', request);
     return response.data;
   } catch (error) {
     return handleApiError(error);
