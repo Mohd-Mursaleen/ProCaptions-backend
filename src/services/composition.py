@@ -24,7 +24,8 @@ class CompositionService:
             "sixcaps": "SixCaps.ttf",
             "impact": "Impact",  # System font as fallback
             "arial_bold": "Arial Bold",  # System font as fallback
-            "helvetica_bold": "Helvetica Bold"  # System font as fallback
+            "helvetica_bold": "Helvetica Bold",  # System font as fallback
+            "boldonse": "Boldonse.ttf"  # Added Boldonse font
         }
         
         # 3D effect presets

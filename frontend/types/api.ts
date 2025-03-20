@@ -139,6 +139,7 @@ export interface TextLayer {
   font_size?: number;
   color?: string;
   font_name?: string;
+  style?: TextLayerStyle;
 }
 
 // Multiple Text Layers Request

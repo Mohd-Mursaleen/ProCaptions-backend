@@ -31,6 +31,7 @@ const AVAILABLE_FONTS = [
   { value: "anton", label: "Anton" },
   { value: "sixcaps", label: "Six Caps" },
   { value: "impact", label: "Impact" },
+  { value: "boldonse", label: "Boldonse" },
 ]
 
 // Custom font loading for preview accuracy

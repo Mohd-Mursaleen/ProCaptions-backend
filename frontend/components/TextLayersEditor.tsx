@@ -444,11 +444,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     setLayers(newLayers);
   };
   
-  // Get the current effect type for a layer
-  const getCurrentEffectType = (layer: TextLayer): string => {
-    if (!layer.style.effects) return 'none';
-    return layer.style.effects.type || 'none';
-  };
+  
 
   // Calculate font style for preview text display
   const getTextStyle = (layer: TextLayer, index: number): React.CSSProperties => {
@@ -663,6 +659,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 <option value="anton">Anton</option>
                 <option value="sixcaps">Six Caps</option>
                 <option value="impact">Impact</option>
+                <option value="boldonse">Boldonse</option>
               </select>
             </div>
             <div>
