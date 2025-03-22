@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import type { Position } from "../types/api"
-import { Move, ZoomIn, Type, Info, Plus, Minus, Settings, Sliders, ChevronDown } from "lucide-react"
+import { Move, ZoomIn, Type, Info, Plus, Minus, Settings, Sliders, ChevronDown, X } from "lucide-react"
 import { MdCenterFocusStrong } from "react-icons/md"
 import { motion } from "framer-motion"
 
@@ -123,10 +123,24 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
 
   // Active tab for settings panels
   const [activeTab, setActiveTab] = useState<TabType>("text")
+  
+  // Add state for mobile drawer
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  
+  // Add window size state
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  })
 
   const previewRef = useRef<HTMLDivElement>(null)
   const textLayerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
+
+  // Toggle mobile drawer
+  const toggleDrawer = () => {
+    setIsDrawerOpen(prev => !prev);
+  }
 
   // Load custom fonts when component mounts
   useEffect(() => {
@@ -142,6 +156,26 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   useEffect(() => {
     setFontSizeInput(fontSize.toString())
   }, [fontSize])
+  
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      })
+      
+      // Close drawer on window resize (to avoid UI issues)
+      if (isDrawerOpen && window.innerWidth > 768) {
+        setIsDrawerOpen(false)
+      }
+    }
+    
+    window.addEventListener("resize", handleResize)
+    return () => {
+      window.removeEventListener("resize", handleResize)
+    }
+  }, [isDrawerOpen])
 
   // Load the background image to get its dimensions
   useEffect(() => {
@@ -619,14 +653,14 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     onFontColorChange(e.target.value)
   }
 
-  // Tab navigation
+  // Render different tab content based on active tab
   const renderTabContent = () => {
     switch (activeTab) {
       case "text":
         return (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label htmlFor="text-input" className="block text-sm font-medium text-white/80 mb-1">
+              <label htmlFor="text-input" className="block text-sm font-medium text-white/80 mb-2">
                 Text Content
               </label>
               <input
@@ -634,14 +668,14 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                 type="text"
                 value={localText}
                 onChange={handleTextChange}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-white/40"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white placeholder-white/40"
                 placeholder="Enter text (e.g., hero)"
                 disabled={disabled}
               />
             </div>
 
             <div>
-              <label htmlFor="font-select" className="block text-sm font-medium text-white/80 mb-1">
+              <label htmlFor="font-select" className="block text-sm font-medium text-white/80 mb-2">
                 Font Family
               </label>
               <div className="relative">
@@ -649,7 +683,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                   id="font-select"
                   value={fontName}
                   onChange={handleFontChange}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
                   disabled={disabled}
                 >
                   {AVAILABLE_FONTS.map((font) => (
@@ -660,35 +694,34 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                 </select>
                 <ChevronDown
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none"
-                  size={16}
+                  size={18}
                 />
               </div>
             </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center mb-4">
               <div className="relative flex items-center">
                 <input
                   id="with-period"
                   type="checkbox"
                   checked={withPeriod}
                   onChange={handleWithPeriodChange}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
+                  className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
                   disabled={disabled}
                 />
                 <label htmlFor="with-period" className="ml-2 block text-sm text-white/80">
                   Add period at the end
                 </label>
               </div>
-              
             </div>
 
             <div>
-              <label htmlFor="font-color" className="block text-sm font-medium text-white/80 mb-1">
+              <label htmlFor="font-color" className="block text-sm font-medium text-white/80 mb-2">
                 Font Color
               </label>
               <div className="flex items-center">
                 <div
-                  className="w-8 h-8 rounded border border-white/20 mr-2"
+                  className="w-10 h-10 rounded border border-white/20 mr-3"
                   style={{ backgroundColor: fontColor }}
                 ></div>
                 <input
@@ -696,29 +729,44 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                   type="color"
                   value={fontColor}
                   onChange={handleFontColorChange}
-                  className="h-8 w-8 rounded bg-transparent"
+                  className="h-10 w-10 rounded bg-transparent touch-manipulation"
                   disabled={disabled}
                 />
               </div>
+            </div>
+            
+            {/* Center text button for mobile */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleCenterText}
+                className="flex items-center justify-center w-full py-3 px-4 bg-indigo-500/20 hover:bg-indigo-500/30 text-white rounded-md border border-indigo-500/40 touch-manipulation"
+                title="Center text in image"
+                disabled={disabled}
+              >
+                <MdCenterFocusStrong size={20} className="mr-2" />
+                Center Text in Image
+              </button>
             </div>
           </div>
         )
 
       case "style":
         return (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label htmlFor="font-size" className="block text-sm font-medium text-white/80 mb-1">
+              <label htmlFor="font-size" className="block text-sm font-medium text-white/80 mb-2">
                 Font Size
               </label>
               <div className="flex items-center">
                 <button
                   type="button"
                   onClick={() => adjustFontSize(-10)}
-                  className="p-2 border border-white/20 rounded-l-md bg-white/5 hover:bg-white/10 text-white"
+                  className="p-3 border border-white/20 rounded-l-md bg-white/5 hover:bg-white/10 text-white touch-manipulation"
                   disabled={disabled}
+                  aria-label="Decrease font size"
                 >
-                  <Minus size={16} />
+                  <Minus size={20} />
                 </button>
                 <input
                   id="font-size-input"
@@ -727,44 +775,45 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                   onChange={handleFontSizeInputChange}
                   onBlur={applyFontSize}
                   onKeyPress={handleFontSizeKeyPress}
-                  className="w-20 text-center border-y border-white/20 py-2 bg-white/10 text-white focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-24 text-center border-y border-white/20 py-3 bg-white/10 text-white focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="Size"
                   disabled={disabled}
                 />
                 <button
                   type="button"
                   onClick={() => adjustFontSize(10)}
-                  className="p-2 border border-white/20 rounded-r-md bg-white/5 hover:bg-white/10 text-white"
+                  className="p-3 border border-white/20 rounded-r-md bg-white/5 hover:bg-white/10 text-white touch-manipulation"
                   disabled={disabled}
+                  aria-label="Increase font size"
                 >
-                  <Plus size={16} />
+                  <Plus size={20} />
                 </button>
                 <span className="ml-2 text-white/50 text-sm">px</span>
               </div>
 
               {/* Font size presets */}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 grid grid-cols-3 gap-2">
                 {[100, 150, 200, 250, 300, 350].map((size) => (
                   <button
                     key={size}
                     type="button"
                     onClick={() => onFontSizeChange(size)}
-                    className={`text-xs py-1 px-2 rounded ${
+                    className={`py-2 px-3 rounded-md text-sm ${
                       fontSize === size
                         ? "bg-indigo-500/30 text-white border border-indigo-500/50"
                         : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
-                    }`}
+                    } touch-manipulation`}
                     disabled={disabled}
                   >
-                    {size}
+                    {size}px
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-1">Text Position</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className="block text-sm font-medium text-white/80 mb-2">Text Position</label>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="position-x" className="text-xs text-white/50">
                     X Position
@@ -774,7 +823,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                     type="number"
                     value={position.x}
                     onChange={(e) => onPositionChange({ ...position, x: Number.parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-1 bg-white/10 border border-white/20 rounded-md text-sm text-white"
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-md text-sm text-white"
                     disabled={disabled}
                   />
                 </div>
@@ -787,7 +836,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                     type="number"
                     value={position.y}
                     onChange={(e) => onPositionChange({ ...position, y: Number.parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-1 bg-white/10 border border-white/20 rounded-md text-sm text-white"
+                    className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-md text-sm text-white"
                     disabled={disabled}
                   />
                 </div>
@@ -795,11 +844,11 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
               <button
                 type="button"
                 onClick={handleCenterText}
-                className="mt-2 flex items-center justify-center w-full py-1 rounded bg-white/5 text-white/80 hover:bg-white/10 text-sm border border-white/10"
+                className="mt-3 flex items-center justify-center w-full py-3 rounded-md bg-white/5 text-white/80 hover:bg-white/10 text-sm border border-white/10 touch-manipulation"
                 title="Center text in image"
                 disabled={disabled}
               >
-                <MdCenterFocusStrong size={16} className="mr-1" />
+                <MdCenterFocusStrong size={20} className="mr-2" />
                 Center Text
               </button>
             </div>
@@ -808,58 +857,58 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
 
       case "advanced":
         return (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-1">Preview Mode</label>
-              <div className="flex space-x-2">
+              <label className="block text-sm font-medium text-white/80 mb-2">Preview Mode</label>
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setPreviewMode("position")}
-                  className={`p-2 rounded flex items-center ${
+                  className={`p-3 rounded-md flex flex-col items-center justify-center ${
                     previewMode === "position"
                       ? "bg-indigo-500/30 text-white border border-indigo-500/50"
                       : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
-                  }`}
+                  } touch-manipulation`}
                   title="Position Mode: Click or drag to position text"
                   disabled={disabled}
                 >
-                  <Move size={16} className="mr-1" />
-                  Position
+                  <Move size={20} className="mb-1" />
+                  <span className="text-xs">Position</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreviewMode("size")}
-                  className={`p-2 rounded flex items-center ${
+                  className={`p-3 rounded-md flex flex-col items-center justify-center ${
                     previewMode === "size"
                       ? "bg-indigo-500/30 text-white border border-indigo-500/50"
                       : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
-                  }`}
+                  } touch-manipulation`}
                   title="Size Mode: Adjust font size"
                   disabled={disabled}
                 >
-                  <ZoomIn size={16} className="mr-1" />
-                  Size
+                  <ZoomIn size={20} className="mb-1" />
+                  <span className="text-xs">Size</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPreviewMode("text")}
-                  className={`p-2 rounded flex items-center ${
+                  className={`p-3 rounded-md flex flex-col items-center justify-center ${
                     previewMode === "text"
                       ? "bg-indigo-500/30 text-white border border-indigo-500/50"
                       : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
-                  }`}
+                  } touch-manipulation`}
                   title="Text Mode: Edit text content"
                   disabled={disabled}
                 >
-                  <Type size={16} className="mr-1" />
-                  Text
+                  <Type size={20} className="mb-1" />
+                  <span className="text-xs">Text</span>
                 </button>
               </div>
             </div>
 
             <div className="p-4 bg-white/5 rounded-md border border-white/10">
               <div className="flex items-center mb-2">
-                <Info size={16} className="text-indigo-400 mr-2" />
+                <Info size={18} className="text-indigo-400 mr-2" />
                 <span className="text-sm font-medium text-white/80">Help & Tips</span>
               </div>
               <ul className="text-xs text-white/60 space-y-1 list-disc pl-5">
@@ -891,13 +940,24 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
+    <div className="flex flex-col lg:flex-row gap-4 relative">
       {/* Preview Panel - More compact layout */}
       <div className="w-full lg:w-3/5 xl:w-7/12">
         <div className="sticky top-4">
           <div className="mb-2 flex justify-between items-center">
             <h3 className="text-md font-medium text-white/90">Text Preview</h3>
-            <div className="text-sm text-white/60">{isDraggingText ? "Dragging text..." : "Drag to reposition"}</div>
+            
+            {/* Mobile-only toggle button for editor panel */}
+            <div className="flex items-center">
+              <div className="text-sm text-white/60 mr-3 hidden sm:block">{isDraggingText ? "Dragging text..." : "Drag to reposition"}</div>
+              <button 
+                className="lg:hidden p-2 bg-indigo-500/20 border border-indigo-500/40 rounded-md text-white/90 touch-manipulation"
+                onClick={toggleDrawer}
+                aria-label="Toggle editor panel"
+              >
+                {isDrawerOpen ? <X size={20} /> : <Settings size={20} />}
+              </button>
+            </div>
           </div>
 
           <motion.div
@@ -944,11 +1004,16 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                 )}
 
                 {/* Display coordinates and dimensions information */}
-                {originalImageDimensions && (
+                {originalImageDimensions && windowSize.width >= 768 && (
                   <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs p-1 rounded-md backdrop-blur-sm border border-white/10">
-                    Position: {position.x}, {position.y} | Size: {fontSize}px |
-                    {((position.x / originalImageDimensions.width) * 100).toFixed(1)}%,
-                    {((position.y / originalImageDimensions.height) * 100).toFixed(1)}%
+                    Position: {position.x}, {position.y} | Size: {fontSize}px
+                  </div>
+                )}
+                
+                {/* Mobile position info */}
+                {originalImageDimensions && windowSize.width < 768 && (
+                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs p-2 rounded-md backdrop-blur-sm border border-white/10">
+                    {position.x}, {position.y} | {fontSize}px
                   </div>
                 )}
               </>
@@ -959,52 +1024,135 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
             )}
           </motion.div>
         </div>
+        
+        {/* Mobile quick actions - fixed at bottom */}
+        {windowSize.width < 768 && !isDrawerOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-0 left-0 right-0 bg-[#050510]/95 backdrop-blur-sm border-t border-white/10 p-2 z-30"
+          >
+            <div className="flex justify-between items-center">
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={handleCenterText}
+                  disabled={disabled}
+                  className="p-3 bg-white/10 text-white/90 rounded-md touch-manipulation"
+                  aria-label="Center text"
+                >
+                  <MdCenterFocusStrong size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustFontSize(-10)}
+                  disabled={disabled}
+                  className="p-3 bg-white/10 text-white/90 rounded-md touch-manipulation"
+                  aria-label="Decrease font size"
+                >
+                  <Minus size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustFontSize(10)}
+                  disabled={disabled}
+                  className="p-3 bg-white/10 text-white/90 rounded-md touch-manipulation"
+                  aria-label="Increase font size"
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={toggleDrawer}
+                disabled={disabled}
+                className="px-4 py-3 bg-indigo-500 text-white rounded-md touch-manipulation"
+              >
+                Edit Text
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      {/* Controls Panel - More compact and adaptive */}
+      {/* Controls Panel - Mobile responsive */}
       <div
-        className="w-full lg:w-2/5 xl:w-5/12 bg-[#050510]/90 rounded-lg border border-white/10 shadow-lg overflow-auto backdrop-blur-sm"
-        style={{ maxHeight: "calc(100vh - 180px)" }}
+        className={`
+          lg:w-2/5 xl:w-5/12 bg-[#050510]/90 rounded-lg border border-white/10 shadow-lg overflow-auto backdrop-blur-sm
+          ${windowSize.width < 768 ? 
+            `fixed inset-0 z-40 ${isDrawerOpen ? 'translate-y-0' : 'translate-y-full'} transition-transform duration-300 ease-in-out` 
+            : ''}
+        `}
+        style={{ maxHeight: windowSize.width >= 768 ? "calc(100vh - 180px)" : "100%" }}
       >
-        {/* Tabs Navigation - Horizontal scrolling on small screens */}
-        <div className="flex border-b border-white/10 overflow-x-auto">
+        {/* Mobile header with close button */}
+        {windowSize.width < 768 && isDrawerOpen && (
+          <div className="sticky top-0 bg-[#050510] border-b border-white/10 p-3 flex justify-between items-center z-10">
+            <h2 className="text-lg font-medium text-white/90">Text Editor</h2>
+            <button 
+              className="p-2 bg-white/10 rounded-md text-white/90"
+              onClick={toggleDrawer}
+              aria-label="Close panel"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        )}
+      
+        {/* Tabs Navigation - Responsive */}
+        <div className={`flex border-b border-white/10 overflow-x-auto ${windowSize.width < 768 && isDrawerOpen ? 'sticky top-12 bg-[#050510] z-10' : ''}`}>
           <button
             onClick={() => setActiveTab("text")}
-            className={`flex items-center px-4 py-2 text-sm font-medium whitespace-nowrap ${
+            className={`flex items-center px-4 py-3 text-sm font-medium whitespace-nowrap ${
               activeTab === "text"
                 ? "text-indigo-400 border-b-2 border-indigo-500"
                 : "text-white/60 hover:text-white hover:bg-white/5"
             }`}
           >
-            <Type className="mr-2" size={16} />
+            <Type className="mr-2" size={18} />
             Text
           </button>
           <button
             onClick={() => setActiveTab("style")}
-            className={`flex items-center px-4 py-2 text-sm font-medium whitespace-nowrap ${
+            className={`flex items-center px-4 py-3 text-sm font-medium whitespace-nowrap ${
               activeTab === "style"
                 ? "text-indigo-400 border-b-2 border-indigo-500"
                 : "text-white/60 hover:text-white hover:bg-white/5"
             }`}
           >
-            <Sliders className="mr-2" size={16} />
+            <Sliders className="mr-2" size={18} />
             Style
           </button>
           <button
             onClick={() => setActiveTab("advanced")}
-            className={`flex items-center px-4 py-2 text-sm font-medium whitespace-nowrap ${
+            className={`flex items-center px-4 py-3 text-sm font-medium whitespace-nowrap ${
               activeTab === "advanced"
                 ? "text-indigo-400 border-b-2 border-indigo-500"
                 : "text-white/60 hover:text-white hover:bg-white/5"
             }`}
           >
-            <Settings className="mr-2" size={16} />
+            <Settings className="mr-2" size={18} />
             Advanced
           </button>
         </div>
 
         {/* Tab Content */}
-        <div className="p-4">{renderTabContent()}</div>
+        <div className="p-4 pb-20">
+          {renderTabContent()}
+        </div>
+        
+        {/* Mobile footer - done button at the bottom */}
+        {windowSize.width < 768 && isDrawerOpen && (
+          <div className="sticky bottom-0 bg-[#050510] border-t border-white/10 p-4">
+            <button
+              type="button"
+              onClick={toggleDrawer}
+              className="w-full px-4 py-3 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 touch-manipulation"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
