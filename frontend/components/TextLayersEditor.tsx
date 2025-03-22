@@ -248,16 +248,55 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
       }
     };
     
+    // Touch event handlers for mobile devices
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragState.isDragging || e.touches.length === 0) return;
+      
+      // Prevent default to stop scrolling while dragging
+      e.preventDefault();
+      
+      // Calculate position relative to image container
+      if (imageRef.current) {
+        const rect = imageRef.current.getBoundingClientRect();
+        const touch = e.touches[0];
+        
+        // Get current position in preview coordinates relative to the image
+        const touchX = touch.clientX - rect.left;
+        const touchY = touch.clientY - rect.top;
+        
+        // Convert touch position to original coordinates
+        const newOriginalPos = previewToOriginalCoordinates(touchX, touchY);
+        
+        // Update the layer position
+        const newLayers = [...layers];
+        newLayers[dragState.layerIndex].position = newOriginalPos;
+        setLayers(newLayers);
+      }
+    };
+    
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (dragState.isDragging) {
+        setDragState(prev => ({ ...prev, isDragging: false }));
+        document.body.classList.remove('cursor-grabbing');
+      }
+    };
+    
     // Add global event listeners when dragging
     if (dragState.isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
+      document.addEventListener('touchcancel', handleTouchEnd);
     }
     
     // Cleanup
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [dragState, layers]);
   
@@ -515,6 +554,30 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
       layerIndex: index,
       startX: e.clientX,
       startY: e.clientY,
+      originalPosition: { ...layers[index].position }
+    });
+    
+    // Apply grabbing cursor to the body during drag operations
+    document.body.classList.add('cursor-grabbing');
+  };
+  
+  // Handle touch start to initiate dragging on touch devices
+  const handleTextLayerTouchStart = (index: number, e: React.TouchEvent) => {
+    e.stopPropagation();
+    
+    if (disabled || e.touches.length === 0) return;
+    
+    // Set selected layer
+    setSelectedLayerIndex(index);
+    
+    const touch = e.touches[0];
+    
+    // Start dragging with the current layer's position
+    setDragState({
+      isDragging: true,
+      layerIndex: index,
+      startX: touch.clientX,
+      startY: touch.clientY,
       originalPosition: { ...layers[index].position }
     });
     
@@ -795,6 +858,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                     className={`preview-text-layer ${selectedLayerIndex === index ? 'ring-2 ring-indigo-400' : ''}`}
                     onClick={(e) => handleTextLayerClick(index, e)}
                     onMouseDown={(e) => handleTextLayerMouseDown(index, e)}
+                    onTouchStart={(e) => handleTextLayerTouchStart(index, e)}
                   >
                     {layer.text}
                   </div>

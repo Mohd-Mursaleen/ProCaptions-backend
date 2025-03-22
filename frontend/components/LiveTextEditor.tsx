@@ -352,6 +352,22 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     // Apply grabbing cursor to the body during drag operations
     document.body.classList.add("cursor-grabbing")
   }
+  
+  // Handle text position with touch (for mobile devices)
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (disabled || e.touches.length === 0) return
+    
+    const touch = e.touches[0]
+    
+    setIsDraggingText(true)
+    setStartDragPos({
+      x: touch.clientX,
+      y: touch.clientY,
+    })
+    
+    // Apply grabbing cursor to the body during drag operations
+    document.body.classList.add("cursor-grabbing")
+  }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDraggingText || !previewRef.current) return
@@ -373,6 +389,36 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
       y: previewPos.y + deltaY,
     }
 
+    // Convert to original coordinates and update position
+    const newOriginalPos = previewToOriginalCoordinates(newPreviewPos.x, newPreviewPos.y)
+    onPositionChange(newOriginalPos)
+  }
+  
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDraggingText || !previewRef.current || e.touches.length === 0) return
+    
+    // Prevent default to stop scrolling while dragging
+    e.preventDefault()
+    
+    const touch = e.touches[0]
+    
+    // Calculate new position
+    const deltaX = touch.clientX - startDragPos.x
+    const deltaY = touch.clientY - startDragPos.y
+    
+    // Set start position for next move
+    setStartDragPos({
+      x: touch.clientX,
+      y: touch.clientY,
+    })
+    
+    // Calculate preview position
+    const previewPos = getPreviewPosition()
+    const newPreviewPos = {
+      x: previewPos.x + deltaX,
+      y: previewPos.y + deltaY,
+    }
+    
     // Convert to original coordinates and update position
     const newOriginalPos = previewToOriginalCoordinates(newPreviewPos.x, newPreviewPos.y)
     onPositionChange(newOriginalPos)
@@ -410,17 +456,59 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
       setIsDraggingText(false)
       document.body.classList.remove("cursor-grabbing")
     }
+    
+    // Global touch handlers for when dragging extends outside the component
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (!isDraggingText || !previewRef.current || e.touches.length === 0) return
+      
+      // Prevent default to stop scrolling while dragging
+      e.preventDefault()
+      
+      const touch = e.touches[0]
+      
+      // Calculate new position
+      const deltaX = touch.clientX - startDragPos.x
+      const deltaY = touch.clientY - startDragPos.y
+      
+      // Set start position for next move
+      setStartDragPos({
+        x: touch.clientX,
+        y: touch.clientY,
+      })
+      
+      // Calculate preview position
+      const previewPos = getPreviewPosition()
+      const newPreviewPos = {
+        x: previewPos.x + deltaX,
+        y: previewPos.y + deltaY,
+      }
+      
+      // Convert to original coordinates and update position
+      const newOriginalPos = previewToOriginalCoordinates(newPreviewPos.x, newPreviewPos.y)
+      onPositionChange(newOriginalPos)
+    }
+    
+    const handleGlobalTouchEnd = () => {
+      setIsDraggingText(false)
+      document.body.classList.remove("cursor-grabbing")
+    }
 
     // Add global event listeners when dragging
     if (isDraggingText) {
       document.addEventListener("mousemove", handleGlobalMouseMove)
       document.addEventListener("mouseup", handleGlobalMouseUp)
+      document.addEventListener("touchmove", handleGlobalTouchMove, { passive: false })
+      document.addEventListener("touchend", handleGlobalTouchEnd)
+      document.addEventListener("touchcancel", handleGlobalTouchEnd)
     }
 
     // Cleanup
     return () => {
       document.removeEventListener("mousemove", handleGlobalMouseMove)
       document.removeEventListener("mouseup", handleGlobalMouseUp)
+      document.removeEventListener("touchmove", handleGlobalTouchMove)
+      document.removeEventListener("touchend", handleGlobalTouchEnd)
+      document.removeEventListener("touchcancel", handleGlobalTouchEnd)
     }
   }, [isDraggingText, startDragPos, previewRef])
 
@@ -452,6 +540,14 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
 
   // Add a mouseup handler directly on the component
   const handlePreviewMouseUp = () => {
+    if (isDraggingText) {
+      setIsDraggingText(false)
+      document.body.classList.remove("cursor-grabbing")
+    }
+  }
+  
+  // Add a touchend handler directly on the component
+  const handlePreviewTouchEnd = () => {
     if (isDraggingText) {
       setIsDraggingText(false)
       document.body.classList.remove("cursor-grabbing")
@@ -812,6 +908,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
             className="relative w-full bg-[#050510] rounded-lg overflow-hidden shadow-lg border border-white/10"
             onClick={handleCanvasClick}
             onMouseUp={handlePreviewMouseUp}
+            onTouchEnd={handlePreviewTouchEnd}
             style={{ maxHeight: "calc(100vh - 220px)" }}
           >
             {backgroundImage ? (
@@ -838,6 +935,8 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                       style={getTextStyle()}
                       className="preview-text"
                       onMouseDown={handleMouseDown}
+                      onTouchStart={handleTouchStart}
+                      onTouchMove={handleTouchMove}
                     >
                       {localText + (withPeriod ? "." : "")}
                     </div>
