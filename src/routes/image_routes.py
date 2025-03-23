@@ -3,9 +3,9 @@ from pathlib import Path
 import shutil
 from src.services.segmentation import SegmentationService
 from src.services.composition import CompositionService, TextLayer
+from src.services.s3_service import S3Service
 from typing import Dict, Any, List
 from pydantic import BaseModel, validator
-from src.services.cloudinary_service import CloudinaryService
 import aiofiles
 import os
 import numpy as np
@@ -13,11 +13,12 @@ from PIL import Image
 import base64
 import io
 import logging
+import glob
 
 router = APIRouter()
 segmentation_service = SegmentationService()
 composition_service = CompositionService()
-cloudinary_service = CloudinaryService()
+s3_service = S3Service()
 logger = logging.getLogger(__name__)
 
 class DramaticTextRequest(BaseModel):
@@ -89,10 +90,10 @@ async def segment_image(file: UploadFile) -> Dict[str, str]:
         fore_path, back_path, mask_path = await segmentation_service.segment_image(temp_path)
         logger.info(f"Segmentation successful: foreground={fore_path}, background={back_path}, mask={mask_path}")
 
-        # Upload to Cloudinary
-        foreground_cloud = await cloudinary_service.upload_image(fore_path)
-        background_cloud = await cloudinary_service.upload_image(back_path)
-        mask_cloud = await cloudinary_service.upload_image(mask_path)
+        # Upload to S3
+        foreground_cloud = await s3_service.upload_image(fore_path)
+        background_cloud = await s3_service.upload_image(back_path)
+        mask_cloud = await s3_service.upload_image(mask_path)
         
         logger.info(f"Image URL details: foreground={foreground_cloud['url']}, background={background_cloud['url']}, mask={mask_cloud['url']}")
 
@@ -100,15 +101,11 @@ async def segment_image(file: UploadFile) -> Dict[str, str]:
         os.remove(temp_path)
         logger.info(f"Temporary file removed: {temp_path}")
         
-        # Don't delete the processed files when using local storage
-        if os.getenv('CLOUDINARY_CLOUD_NAME') != 'your_cloud_name':
-            # Only clean up files if using real Cloudinary (not local storage)
-            os.remove(fore_path)
-            os.remove(back_path)
-            os.remove(mask_path)
-            logger.info("Processed files removed (using Cloudinary)")
-        else:
-            logger.info("Keeping processed files (using local storage)")
+        # Always clean up the processed files after uploading to S3
+        os.remove(fore_path)
+        os.remove(back_path)
+        os.remove(mask_path)
+        logger.info("Processed files removed (using S3 storage)")
 
         return {
             "foreground": foreground_cloud["url"],
@@ -155,18 +152,25 @@ async def add_dramatic_text(request: DramaticTextRequest) -> Dict[str, str]:
         
         # Call the composition service with the parameters
         # Pass to_uppercase=False to prevent automatic capitalization
-        path, info = await composition_service.add_dramatic_text(
-            background_path=request.background_path,
-            text=request.text,
-            position=position,
-            font_size=font_size,
-            color=color,
-            font_name=font_name,
-            with_period=with_period,
-            to_uppercase=False
-        )
-        
-        return {"image_with_text": path}
+        try:
+            path, info = await composition_service.add_dramatic_text(
+                background_path=request.background_path,
+                text=request.text,
+                position=position,
+                font_size=font_size,
+                color=color,
+                font_name=font_name,
+                with_period=with_period,
+                to_uppercase=False
+            )
+            
+            return {"image_with_text": path}
+        except FileNotFoundError as e:
+            logger.error(f"File not found error: {str(e)}")
+            raise HTTPException(status_code=404, detail=f"Image file not found: {str(e)}")
+        except ValueError as e:
+            logger.error(f"Value error in add_dramatic_text: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error in add_dramatic_text: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error adding text: {str(e)}")
@@ -174,13 +178,21 @@ async def add_dramatic_text(request: DramaticTextRequest) -> Dict[str, str]:
 @router.post("/compose")
 async def compose_final(request: ComposeRequest) -> Dict[str, str]:
     try:
-        result_path = await composition_service.compose_final_image(
-            request.background_with_text_path,
-            request.foreground_path
-        )
-        return {"final_image": result_path}
+        try:
+            result_path = await composition_service.compose_final_image(
+                request.background_with_text_path,
+                request.foreground_path
+            )
+            return {"final_image": result_path}
+        except FileNotFoundError as e:
+            logger.error(f"File not found error in compose_final: {str(e)}")
+            raise HTTPException(status_code=404, detail=f"Image file not found: {str(e)}")
+        except ValueError as e:
+            logger.error(f"Value error in compose_final: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error(f"Error in compose_final: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error composing final image: {str(e)}")
 
 @router.post("/add-multiple-text-layers")
 async def add_multiple_text_layers(request: MultiLayerTextRequest) -> Dict[str, str]:
@@ -210,13 +222,67 @@ async def add_multiple_text_layers(request: MultiLayerTextRequest) -> Dict[str, 
             layers.append(TextLayer(text, safe_position, style))
         
         # Call composition service
-        image_path = await composition_service.add_multiple_text_layers(
-            request.background_path,
-            layers
-        )
-        
-        # Return the image path
-        return {"image_with_text": image_path}
+        try:
+            image_path = await composition_service.add_multiple_text_layers(
+                request.background_path,
+                layers
+            )
+            
+            # Return the image path
+            return {"image_with_text": image_path}
+        except FileNotFoundError as e:
+            logger.error(f"File not found error in add_multiple_text_layers: {str(e)}")
+            raise HTTPException(status_code=404, detail=f"Image file not found: {str(e)}")
+        except ValueError as e:
+            logger.error(f"Value error in add_multiple_text_layers: {str(e)}")
+            raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logging.error(f"Failed to add multiple text layers: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to add multiple text layers: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to add multiple text layers: {str(e)}")
+
+@router.get("/list-uploads")
+async def list_uploads() -> Dict[str, List[str]]:
+    """List all files in the uploads directory for debugging purposes"""
+    try:
+        # Create base uploads directory if it doesn't exist
+        base_dir = Path("uploads")
+        base_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Check public directory
+        public_dir = base_dir / "public"
+        public_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Check processed directory
+        processed_dir = base_dir / "processed"
+        processed_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Check temp directory
+        temp_dir = base_dir / "temp"
+        temp_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Get files in each directory
+        base_files = glob.glob(str(base_dir / "*.*"))
+        public_files = glob.glob(str(public_dir / "*.*"))
+        processed_files = glob.glob(str(processed_dir / "*.*")) 
+        temp_files = glob.glob(str(temp_dir / "*.*"))
+        
+        # Get current working directory for reference
+        cwd = os.getcwd()
+        
+        return {
+            "cwd": cwd,
+            "base_dir": str(base_dir.absolute()),
+            "base_files": [os.path.basename(f) for f in base_files],
+            "public_files": [os.path.basename(f) for f in public_files],
+            "processed_files": [os.path.basename(f) for f in processed_files],
+            "temp_files": [os.path.basename(f) for f in temp_files],
+            "upload_dirs_exist": {
+                "base": os.path.exists(str(base_dir)),
+                "public": os.path.exists(str(public_dir)),
+                "processed": os.path.exists(str(processed_dir)),
+                "temp": os.path.exists(str(temp_dir))
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error listing uploads: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error listing uploads: {str(e)}") 

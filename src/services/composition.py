@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Any, Union
 import requests
 from io import BytesIO
-from src.services.cloudinary_service import CloudinaryService
+from src.services.s3_service import S3Service
 import os
 from pathlib import Path
 import cv2
@@ -11,10 +11,16 @@ import logging
 import math
 import random
 import time
+import tempfile
+import aiofiles
+import aiohttp
+import urllib.parse
+
+logger = logging.getLogger(__name__)
 
 class CompositionService:
     def __init__(self):
-        self.cloudinary = CloudinaryService()
+        self.s3 = S3Service()
         self.fonts_dir = Path("assets/fonts")
         self.fonts_dir.mkdir(parents=True, exist_ok=True)
         
@@ -66,6 +72,91 @@ class CompositionService:
             }
         }
 
+        # Ensure the uploads directory exists
+        Path("uploads/public").mkdir(parents=True, exist_ok=True)
+        Path("uploads/temp").mkdir(parents=True, exist_ok=True)
+        
+        # Base directory for the application
+        self.base_dir = Path(os.getcwd())
+        logger.info(f"CompositionService initialized with base directory: {self.base_dir}")
+
+    async def _resolve_image_path(self, image_path: str) -> str:
+        """
+        Resolves various image path formats to an actual file path that can be opened.
+        Handles URLs, S3 paths, and local paths, ensuring the file exists.
+        
+        Args:
+            image_path: URL, S3 path, or local file path
+            
+        Returns:
+            A local file path that can be opened by PIL
+        """
+        logger.info(f"Resolving image path: {image_path}")
+        
+        # If it's a URL, download it
+        if image_path.startswith(('http://', 'https://')):
+            logger.info(f"Detected URL path: {image_path}")
+            try:
+                # Create a temporary file
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                temp_path = temp_file.name
+                temp_file.close()
+                
+                # Download the file
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(image_path) as response:
+                        if response.status != 200:
+                            raise Exception(f"Failed to download image: HTTP {response.status}")
+                        
+                        content = await response.read()
+                        async with aiofiles.open(temp_path, 'wb') as f:
+                            await f.write(content)
+                
+                logger.info(f"Downloaded image to temporary file: {temp_path}")
+                return temp_path
+            
+            except Exception as e:
+                logger.error(f"Error downloading image from URL: {str(e)}")
+                raise ValueError(f"Failed to download image from URL: {str(e)}")
+        
+        # If it's a relative path starting with /uploads
+        elif image_path.startswith('/uploads/'):
+            logger.info(f"Detected /uploads/ path: {image_path}")
+            
+            # Try different path resolutions
+            possible_paths = [
+                # Absolute path as provided
+                image_path,
+                # Remove leading slash and use relative to current directory
+                str(self.base_dir / image_path[1:]),
+                # Try relative to the current working directory
+                str(Path("uploads") / image_path[9:])  # Remove "/uploads/" prefix
+            ]
+            
+            for path in possible_paths:
+                logger.info(f"Trying path: {path}")
+                if os.path.isfile(path):
+                    logger.info(f"Found file at: {path}")
+                    return path
+            
+            # If we got here, none of the paths worked
+            logger.error(f"File not found after trying multiple path resolutions: {possible_paths}")
+            raise FileNotFoundError(f"Could not locate image file at any of these locations: {', '.join(possible_paths)}")
+        
+        # Otherwise, treat it as a local path
+        else:
+            logger.info(f"Treating as local path: {image_path}")
+            if os.path.isfile(image_path):
+                return image_path
+            
+            # Try with base directory
+            full_path = str(self.base_dir / image_path)
+            if os.path.isfile(full_path):
+                return full_path
+                
+            logger.error(f"File not found: {image_path} or {full_path}")
+            raise FileNotFoundError(f"File not found: {image_path}")
+
     async def _get_image_from_url(self, url: str) -> Image.Image:
         """Fetches an image from a URL with improved error handling"""
         try:
@@ -115,442 +206,218 @@ class CompositionService:
         color: str = "#FFFFFF",
         effects: Dict[str, Any] = None
     ) -> None:
-        """Apply advanced text effects"""
-        try:
-            # Log the exact position where text will be drawn
-            logging.info(f"Drawing text at exact position: {position}")
+        """
+        Apply text with visual effects to the image.
+        
+        Args:
+            draw: ImageDraw object
+            text: Text to draw
+            position: (x, y) position
+            font: Font to use
+            color: Text color in hex format
+            effects: Dictionary with text effects settings
+        """
+        # Log all input parameters for debugging
+        logger.info(f"_apply_text_effects: text='{text}', position={position}, font={font}, color={color}")
+        logger.info(f"Effects: {effects}")
+        
+        # Get bounding box of the text to properly center it
+        left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+        text_width = right - left
+        text_height = bottom - top
+        
+        logger.debug(f"Text bounding box: width={text_width}, height={text_height}")
+        
+        # Convert position tuple to x, y coordinates
+        if isinstance(position, tuple) and len(position) == 2:
+            x, y = position
+        else:
+            # Handle dictionary positions (from frontend)
+            if isinstance(position, dict) and 'x' in position and 'y' in position:
+                x = position['x']
+                y = position['y']
+            else:
+                logger.warning(f"Invalid position format: {position}, using (0, 0)")
+                x, y = 0, 0
+                
+        logger.debug(f"Original position: x={x}, y={y}")
+                
+        # Apply the ORIGINAL positioning logic that worked correctly
+        # 1. Center horizontally
+        centered_x = x - text_width // 2
+        
+        # 2. Apply the vertical adjustment factor that matches CSS rendering
+        # This factor (0.375 or 37.5%) was calibrated to match frontend preview
+        vertical_adjustment_factor = 0.375
+        vertical_adjustment = int(text_height * vertical_adjustment_factor)
+        
+        # 3. Center vertically and apply the adjustment
+        centered_y = y - text_height // 2 - vertical_adjustment
+        
+        logger.debug(f"Adjusted position: x={centered_x}, y={centered_y} (with {vertical_adjustment}px vertical adjustment)")
+        
+        # If no effects specified or effects is None, just draw the text
+        if not effects:
+            logger.debug("No effects specified, drawing plain text")
+            draw.text((centered_x, centered_y), text, fill=color, font=font)
+            return
             
-            # Ensure color is properly formatted
-            if not color or not isinstance(color, str):
-                color = "#FFFFFF"
+        # Check if it's the legacy format (direct keys) or new format (type + settings)
+        if 'type' in effects:
+            # Process the new unified effects format
+            effect_type = effects.get('type')
+            settings = effects.get('settings', {})
             
-            # If no effects, just draw normal text
-            if not effects:
-                draw.text(position, text, fill=color, font=font)
-                return
+            logger.debug(f"Using new effects format: type={effect_type}")
             
-            # Extract effect parameters
-            shadow = effects.get('shadow', None)
-            outline = effects.get('outline', None)
-            glow = effects.get('glow', None)
-            depth_3d = effects.get('3d_depth', None)
-            text_gradient = effects.get('text_gradient', None)
-            background_gradient = effects.get('background_gradient', None)
-            
-            # Apply 3D depth effect
-            if depth_3d:
-                preset = self.effect_presets['3d_depth']
-                layers = depth_3d.get('layers', preset['layers'])
-                angle = depth_3d.get('angle', preset['angle'])
-                distance = depth_3d.get('distance', preset['distance'])
-                colors = depth_3d.get('colors', preset['color_gradient'])
+            if effect_type == 'shadow':
+                # Shadow effect
+                shadow_offset = settings.get('offset', [5, 5])
+                shadow_color = settings.get('color', '#000000')
+                shadow_opacity = settings.get('opacity', 0.5)
+                shadow_blur = settings.get('blur', 3)
+                
+                # Ensure offset is a tuple/list with at least 2 elements
+                if isinstance(shadow_offset, (list, tuple)) and len(shadow_offset) >= 2:
+                    offset_x, offset_y = shadow_offset[0], shadow_offset[1]
+                else:
+                    offset_x, offset_y = 5, 5
+                
+                logger.debug(f"Applying shadow effect: offset=({offset_x}, {offset_y}), color={shadow_color}, opacity={shadow_opacity}, blur={shadow_blur}")
+                
+                # Convert shadow color to RGBA with opacity
+                shadow_rgba = self._hex_to_rgba(shadow_color)
+                shadow_rgba = (shadow_rgba[0], shadow_rgba[1], shadow_rgba[2], int(255 * shadow_opacity))
+                
+                # Apply shadow
+                shadow_x = centered_x + offset_x
+                shadow_y = centered_y + offset_y
+                
+                # Draw shadow text
+                draw.text((shadow_x, shadow_y), text, fill=shadow_rgba, font=font)
+                
+                # Draw main text on top
+                draw.text((centered_x, centered_y), text, fill=color, font=font)
+                
+            elif effect_type == 'outline':
+                # Outline effect
+                outline_width = settings.get('width', 2)
+                outline_color = settings.get('color', '#000000')
+                outline_opacity = settings.get('opacity', 1.0)
+                
+                logger.debug(f"Applying outline effect: width={outline_width}, color={outline_color}, opacity={outline_opacity}")
+                
+                # Convert outline color to RGBA with opacity
+                outline_rgba = self._hex_to_rgba(outline_color)
+                outline_rgba = (outline_rgba[0], outline_rgba[1], outline_rgba[2], int(255 * outline_opacity))
+                
+                # Draw text multiple times around the target position for outline
+                for offset_x in range(-outline_width, outline_width + 1):
+                    for offset_y in range(-outline_width, outline_width + 1):
+                        # Skip the center pixel
+                        if offset_x == 0 and offset_y == 0:
+                            continue
+                            
+                        # Draw the outline text
+                        draw.text(
+                            (centered_x + offset_x, centered_y + offset_y),
+                            text,
+                            fill=outline_rgba,
+                            font=font
+                        )
+                
+                # Draw the main text on top
+                draw.text((centered_x, centered_y), text, fill=color, font=font)
+                
+            elif effect_type == 'glow':
+                # Glow effect
+                glow_color = settings.get('color', '#FFFFFF')
+                glow_radius = settings.get('radius', 10)
+                glow_opacity = settings.get('opacity', 0.7)
+                
+                logger.debug(f"Applying glow effect: color={glow_color}, radius={glow_radius}, opacity={glow_opacity}")
+                
+                # Convert glow color to RGBA with opacity
+                glow_rgba = self._hex_to_rgba(glow_color)
+                glow_rgba = (glow_rgba[0], glow_rgba[1], glow_rgba[2], int(255 * glow_opacity))
+                
+                # Create a series of increasingly transparent outlines
+                steps = min(glow_radius, 20)  # Limit to 20 steps for performance
+                
+                for i in range(1, steps + 1):
+                    current_radius = (i / steps) * glow_radius
+                    current_opacity = glow_opacity * (1 - (i / steps))
+                    
+                    current_rgba = (glow_rgba[0], glow_rgba[1], glow_rgba[2], int(255 * current_opacity))
+                    
+                    # Draw text at various offsets to create the glow
+                    for angle in range(0, 360, 30):  # 12 points around the circle
+                        offset_x = int(current_radius * math.cos(math.radians(angle)))
+                        offset_y = int(current_radius * math.sin(math.radians(angle)))
+                        
+                        draw.text(
+                            (centered_x + offset_x, centered_y + offset_y),
+                            text,
+                            fill=current_rgba,
+                            font=font
+                        )
+                
+                # Draw the main text on top
+                draw.text((centered_x, centered_y), text, fill=color, font=font)
+                
+            elif effect_type == '3d_depth':
+                # 3D depth effect
+                layers = settings.get('layers', 10)
+                angle = settings.get('angle', 45)
+                distance = settings.get('distance', 2)
+                color_gradient = settings.get('color_gradient', ['#333333', '#666666', '#999999'])
+                
+                logger.debug(f"Applying 3D depth effect: layers={layers}, angle={angle}, distance={distance}")
                 
                 # Convert angle to radians
                 angle_rad = math.radians(angle)
                 
-                # Draw layers from back to front
+                # Calculate x and y offsets based on the angle
+                dx = math.cos(angle_rad) * distance
+                dy = math.sin(angle_rad) * distance
+                
+                # Draw layers back to front
                 for i in range(layers, 0, -1):
-                    offset_x = int(math.cos(angle_rad) * distance * i)
-                    offset_y = int(math.sin(angle_rad) * distance * i)
+                    # Map layer index to color index in gradient
+                    color_index = min(int((i / layers) * (len(color_gradient) - 1)), len(color_gradient) - 1)
+                    layer_color = color_gradient[color_index]
                     
-                    # Get color for this layer (gradient or fixed)
-                    if isinstance(colors, list) and len(colors) > 0:
-                        color_idx = min(int(i * len(colors) / layers), len(colors) - 1)
-                        layer_color = colors[color_idx]
-                    else:
-                        layer_color = colors if isinstance(colors, str) else "#666666"
+                    layer_x = centered_x - int(i * dx)
+                    layer_y = centered_y - int(i * dy)
                     
-                    # Draw the layer
-                    draw.text(
-                        (position[0] + offset_x, position[1] + offset_y),
-                        text, 
-                        fill=layer_color, 
-                        font=font
-                    )
-            
-            # Apply glow effect
-            if glow:
-                try:
-                    preset = self.effect_presets['glow']
-                    glow_color = glow.get('color', preset['color'])
-                    glow_radius = glow.get('radius', preset['radius'])
-                    glow_opacity = glow.get('opacity', preset['opacity'])
-                    
-                    # Create a separate image for the glow
-                    glow_img = Image.new('RGBA', draw.im.size, (0, 0, 0, 0))
-                    glow_draw = ImageDraw.Draw(glow_img)
-                    
-                    # Draw text on glow image
-                    glow_draw.text(position, text, fill=glow_color, font=font)
-                    
-                    # Apply blur to create glow effect
-                    glow_img = glow_img.filter(ImageFilter.GaussianBlur(glow_radius))
-                    
-                    # Adjust opacity
-                    glow_np = np.array(glow_img)
-                    glow_np[:, :, 3] = (glow_np[:, :, 3] * glow_opacity).astype(np.uint8)
-                    
-                    # Composite glow underneath main text
-                    draw.im.paste(Image.fromarray(glow_np), (0, 0), Image.fromarray(glow_np))
-                except Exception as e:
-                    logging.error(f"Error applying glow effect: {str(e)}")
-                    # Continue with other effects
-            
-            # Apply shadow effect
-            if shadow:
-                try:
-                    preset = self.effect_presets['shadow']
-                    # Fix: Ensure offset is tuple of integers
-                    if isinstance(shadow.get('offset'), (list, tuple)):
-                        offset_value = shadow.get('offset', preset['offset'])
-                        # Ensure we have at least two elements for x,y
-                        if len(offset_value) >= 2:
-                            shadow_offset = (int(offset_value[0]), int(offset_value[1]))
-                        else:
-                            # Default if we don't have enough values
-                            shadow_offset = preset['offset']
-                    else:
-                        # Use default if not a sequence
-                        shadow_offset = preset['offset']
-                    
-                    shadow_color = shadow.get('color', preset['color'])
-                    shadow_opacity = shadow.get('opacity', preset['opacity'])
-                    shadow_blur = shadow.get('blur', preset['blur'])
-                    
-                    # Ensure shadow_color is valid
-                    if not shadow_color or not isinstance(shadow_color, str):
-                        shadow_color = preset['color']
-                    
-                    # Draw shadow
-                    shadow_pos = (position[0] + shadow_offset[0], position[1] + shadow_offset[1])
-                    
-                    # Create separate image for shadow (easier to blur)
-                    shadow_img = Image.new('RGBA', draw.im.size, (0, 0, 0, 0))
-                    shadow_draw = ImageDraw.Draw(shadow_img)
-                    
-                    # Draw text in shadow color
-                    shadow_draw.text(shadow_pos, text, fill=shadow_color, font=font)
-                    
-                    # Apply blur to shadow
-                    if shadow_blur > 0:
-                        shadow_img = shadow_img.filter(ImageFilter.GaussianBlur(shadow_blur))
-                    
-                    # Adjust opacity
-                    shadow_np = np.array(shadow_img)
-                    shadow_np[:, :, 3] = (shadow_np[:, :, 3] * shadow_opacity).astype(np.uint8)
-                    
-                    # Composite shadow (underneath)
-                    draw.im.paste(Image.fromarray(shadow_np), (0, 0), Image.fromarray(shadow_np))
-                except Exception as e:
-                    logging.error(f"Error applying shadow effect: {str(e)}")
-                    # Continue with other effects
-            
-            # Draw outline effect
-            if outline:
-                try:
-                    preset = self.effect_presets['outline']
-                    outline_width = outline.get('width', preset['width'])
-                    outline_color = outline.get('color', preset['color'])
-                    
-                    # Ensure outline_color is valid
-                    if not outline_color or not isinstance(outline_color, str):
-                        outline_color = preset['color']
-                    
-                    # Draw text outline by offsetting in all directions
-                    for dx in range(-outline_width, outline_width+1):
-                        for dy in range(-outline_width, outline_width+1):
-                            if dx != 0 or dy != 0:  # Skip the center (actual text)
-                                draw.text(
-                                    (position[0] + dx, position[1] + dy),
-                                    text, 
-                                    fill=outline_color, 
-                                    font=font
-                                )
-                except Exception as e:
-                    logging.error(f"Error applying outline effect: {str(e)}")
-                    # Continue with main text
-            
-            # Apply text gradient if specified
-            if text_gradient:
-                try:
-                    preset = self.effect_presets['text_gradient']
-                    gradient_colors = text_gradient.get('colors', preset['colors'])
-                    gradient_direction = text_gradient.get('direction', preset['direction'])
-                    use_mask = text_gradient.get('use_mask', preset['use_mask'])
-                    
-                    # Get text dimensions
-                    text_bbox = draw.textbbox(position, text, font=font)
-                    text_width = text_bbox[2] - text_bbox[0]
-                    text_height = text_bbox[3] - text_bbox[1]
-                    
-                    # Create a mask image with the text
-                    mask_img = Image.new('RGBA', draw.im.size, (0, 0, 0, 0))
-                    mask_draw = ImageDraw.Draw(mask_img)
-                    mask_draw.text(position, text, fill=(255, 255, 255, 255), font=font)
-                    mask_array = np.array(mask_img)
-                    
-                    # Create a gradient image sized to the text
-                    gradient_img = Image.new('RGBA', draw.im.size, (0, 0, 0, 0))
-                    gradient_draw = ImageDraw.Draw(gradient_img)
-                    
-                    # Create gradient array
-                    if gradient_direction == 'horizontal':
-                        # Create horizontal gradient
-                        for i in range(text_width):
-                            # Calculate normalized position in gradient
-                            pos = i / max(1, text_width - 1)
-                            color_idx = pos * (len(gradient_colors) - 1)
-                            
-                            # Get interpolated color
-                            idx_floor = int(color_idx)
-                            idx_ceil = min(idx_floor + 1, len(gradient_colors) - 1)
-                            
-                            # Get the two colors to interpolate between
-                            color1 = self._hex_to_rgba(gradient_colors[idx_floor])
-                            color2 = self._hex_to_rgba(gradient_colors[idx_ceil])
-                            
-                            # Calculate blend factor
-                            blend = color_idx - idx_floor
-                            
-                            # Interpolate colors
-                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
-                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
-                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
-                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
-                            
-                            # Draw a vertical line of this color
-                            x_pos = position[0] + i
-                            for j in range(text_height):
-                                y_pos = position[1] + j
-                                if 0 <= x_pos < draw.im.width and 0 <= y_pos < draw.im.height:
-                                    gradient_img.putpixel((x_pos, y_pos), (r, g, b, a))
-                                    
-                    elif gradient_direction == 'vertical':
-                        # Create vertical gradient
-                        for j in range(text_height):
-                            # Calculate normalized position in gradient
-                            pos = j / max(1, text_height - 1)
-                            color_idx = pos * (len(gradient_colors) - 1)
-                            
-                            # Get interpolated color
-                            idx_floor = int(color_idx)
-                            idx_ceil = min(idx_floor + 1, len(gradient_colors) - 1)
-                            
-                            # Get the two colors to interpolate between
-                            color1 = self._hex_to_rgba(gradient_colors[idx_floor])
-                            color2 = self._hex_to_rgba(gradient_colors[idx_ceil])
-                            
-                            # Calculate blend factor
-                            blend = color_idx - idx_floor
-                            
-                            # Interpolate colors
-                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
-                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
-                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
-                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
-                            
-                            # Draw a horizontal line of this color
-                            y_pos = position[1] + j
-                            for i in range(text_width):
-                                x_pos = position[0] + i
-                                if 0 <= x_pos < draw.im.width and 0 <= y_pos < draw.im.height:
-                                    gradient_img.putpixel((x_pos, y_pos), (r, g, b, a))
-                    else:  # diagonal
-                        # Create diagonal gradient
-                        for i in range(text_width):
-                            for j in range(text_height):
-                                # Calculate normalized position in gradient (diagonal)
-                                pos = (i / max(1, text_width - 1) + j / max(1, text_height - 1)) / 2
-                                color_idx = pos * (len(gradient_colors) - 1)
-                                
-                                # Get interpolated color
-                                idx_floor = int(color_idx)
-                                idx_ceil = min(idx_floor + 1, len(gradient_colors) - 1)
-                                
-                                # Get the two colors to interpolate between
-                                color1 = self._hex_to_rgba(gradient_colors[idx_floor])
-                                color2 = self._hex_to_rgba(gradient_colors[idx_ceil])
-                                
-                                # Calculate blend factor
-                                blend = color_idx - idx_floor
-                                
-                                # Interpolate colors
-                                r = int(color1[0] * (1 - blend) + color2[0] * blend)
-                                g = int(color1[1] * (1 - blend) + color2[1] * blend)
-                                b = int(color1[2] * (1 - blend) + color2[2] * blend)
-                                a = int(color1[3] * (1 - blend) + color2[3] * blend)
-                                
-                                # Set pixel color
-                                x_pos = position[0] + i
-                                y_pos = position[1] + j
-                                if 0 <= x_pos < draw.im.width and 0 <= y_pos < draw.im.height:
-                                    gradient_img.putpixel((x_pos, y_pos), (r, g, b, a))
-                    
-                    # Apply the gradient with the text mask
-                    if use_mask:
-                        # Use text as mask for the gradient
-                        gradient_array = np.array(gradient_img)
-                        # Only keep gradient where mask is non-zero
-                        gradient_array[:, :, 3] = np.minimum(gradient_array[:, :, 3], mask_array[:, :, 3])
-                        # Paste the masked gradient
-                        draw.im.paste(Image.fromarray(gradient_array), (0, 0), Image.fromarray(mask_array))
-                    else:
-                        # Just draw the gradient directly (less precise)
-                        draw.text(position, text, fill=None, font=font, embedded_color=True)
-                except Exception as e:
-                    logging.error(f"Error applying text gradient: {str(e)}")
-                    # Fall back to regular text
-                    draw.text(position, text, fill=color, font=font)
-            # Apply background gradient if specified
-            elif background_gradient:
-                try:
-                    preset = self.effect_presets['background_gradient']
-                    bg_colors = background_gradient.get('colors', preset['colors'])
-                    bg_direction = background_gradient.get('direction', preset['direction'])
-                    padding = background_gradient.get('padding', preset['padding'])
-                    radius = background_gradient.get('radius', preset['radius'])
-                    opacity = background_gradient.get('opacity', preset['opacity'])
-                    
-                    # Get text dimensions
-                    text_bbox = draw.textbbox(position, text, font=font)
-                    
-                    # Add padding
-                    x1 = text_bbox[0] - padding
-                    y1 = text_bbox[1] - padding
-                    x2 = text_bbox[2] + padding
-                    y2 = text_bbox[3] + padding
-                    
-                    # Ensure within image bounds
-                    x1 = max(0, x1)
-                    y1 = max(0, y1)
-                    x2 = min(draw.im.width, x2)
-                    y2 = min(draw.im.height, y2)
-                    
-                    bg_width = x2 - x1
-                    bg_height = y2 - y1
-                    
-                    # Create background gradient image
-                    bg_img = Image.new('RGBA', (bg_width, bg_height), (0, 0, 0, 0))
-                    bg_draw = ImageDraw.Draw(bg_img)
-                    
-                    # Draw background with gradient
-                    if bg_direction == 'horizontal':
-                        for i in range(bg_width):
-                            # Calculate color position
-                            pos = i / max(1, bg_width - 1)
-                            color_idx = pos * (len(bg_colors) - 1)
-                            
-                            # Interpolate colors
-                            idx_floor = int(color_idx)
-                            idx_ceil = min(idx_floor + 1, len(bg_colors) - 1)
-                            
-                            color1 = self._hex_to_rgba(bg_colors[idx_floor])
-                            color2 = self._hex_to_rgba(bg_colors[idx_ceil])
-                            
-                            blend = color_idx - idx_floor
-                            
-                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
-                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
-                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
-                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
-                            
-                            # Adjust for overall opacity
-                            a = int(a * opacity)
-                            
-                            # Draw vertical line
-                            bg_draw.line([(i, 0), (i, bg_height)], fill=(r, g, b, a))
-                    elif bg_direction == 'vertical':
-                        for j in range(bg_height):
-                            # Calculate color position
-                            pos = j / max(1, bg_height - 1)
-                            color_idx = pos * (len(bg_colors) - 1)
-                            
-                            # Interpolate colors
-                            idx_floor = int(color_idx)
-                            idx_ceil = min(idx_floor + 1, len(bg_colors) - 1)
-                            
-                            color1 = self._hex_to_rgba(bg_colors[idx_floor])
-                            color2 = self._hex_to_rgba(bg_colors[idx_ceil])
-                            
-                            blend = color_idx - idx_floor
-                            
-                            r = int(color1[0] * (1 - blend) + color2[0] * blend)
-                            g = int(color1[1] * (1 - blend) + color2[1] * blend)
-                            b = int(color1[2] * (1 - blend) + color2[2] * blend)
-                            a = int(color1[3] * (1 - blend) + color2[3] * blend)
-                            
-                            # Adjust for overall opacity
-                            a = int(a * opacity)
-                            
-                            # Draw horizontal line
-                            bg_draw.line([(0, j), (bg_width, j)], fill=(r, g, b, a))
-                    else:  # radial
-                        # Center of the background box
-                        center_x = bg_width // 2
-                        center_y = bg_height // 2
-                        max_dist = math.sqrt(center_x**2 + center_y**2)
-                        
-                        for i in range(bg_width):
-                            for j in range(bg_height):
-                                # Calculate distance from center (normalized)
-                                dist = math.sqrt((i - center_x)**2 + (j - center_y)**2) / max_dist
-                                color_idx = dist * (len(bg_colors) - 1)
-                                
-                                # Interpolate colors
-                                idx_floor = int(color_idx)
-                                idx_ceil = min(idx_floor + 1, len(bg_colors) - 1)
-                                
-                                color1 = self._hex_to_rgba(bg_colors[idx_floor])
-                                color2 = self._hex_to_rgba(bg_colors[idx_ceil])
-                                
-                                blend = color_idx - idx_floor
-                                
-                                r = int(color1[0] * (1 - blend) + color2[0] * blend)
-                                g = int(color1[1] * (1 - blend) + color2[1] * blend)
-                                b = int(color1[2] * (1 - blend) + color2[2] * blend)
-                                a = int(color1[3] * (1 - blend) + color2[3] * blend)
-                                
-                                # Adjust for overall opacity
-                                a = int(a * opacity)
-                                
-                                # Set pixel
-                                bg_img.putpixel((i, j), (r, g, b, a))
-                    
-                    # Apply rounded corners if specified
-                    if radius > 0:
-                        # Create a mask with rounded corners
-                        mask = Image.new('L', (bg_width, bg_height), 0)
-                        mask_draw = ImageDraw.Draw(mask)
-                        mask_draw.rounded_rectangle([(0, 0), (bg_width-1, bg_height-1)], radius=radius, fill=255)
-                        
-                        # Apply mask to background
-                        bg_array = np.array(bg_img)
-                        mask_array = np.array(mask)
-                        bg_array[:, :, 3] = bg_array[:, :, 3] * mask_array / 255
-                        bg_img = Image.fromarray(bg_array)
-                    
-                    # Paste background onto main image
-                    draw.im.paste(bg_img, (x1, y1), bg_img)
-                    
-                    # Draw the text
-                    draw.text(position, text, fill=color, font=font)
-                except Exception as e:
-                    logging.error(f"Error applying background gradient: {str(e)}")
-                    # Fall back to regular text
-                    draw.text(position, text, fill=color, font=font)
+                    draw.text((layer_x, layer_y), text, fill=layer_color, font=font)
+                
+                # Draw the main text on top
+                draw.text((centered_x, centered_y), text, fill=color, font=font)
+                
             else:
-                # Draw the main text on top (no special effects)
-                draw.text(position, text, fill=color, font=font)
+                # Unknown effect type, just draw plain text
+                logger.warning(f"Unknown effect type: {effect_type}, drawing plain text")
+                draw.text((centered_x, centered_y), text, fill=color, font=font)
+        
+        else:
+            # Legacy format (for backward compatibility)
+            logger.debug("Using legacy effects format (direct keys)")
             
-        except Exception as e:
-            logging.error(f"Error in _apply_text_effects: {str(e)}")
-            # Fallback to simple text rendering
-            try:
-                draw.text(position, text, fill="#FFFFFF", font=font)
-            except:
-                # Last resort fallback
-                default_font = ImageFont.load_default()
-                draw.text(position, text, fill="#FFFFFF", font=default_font)
+            # Apply shadow if specified
+            if 'shadow' in effects:
+                shadow_settings = effects['shadow']
+                shadow_offset = shadow_settings.get('offset', (5, 5))
+                shadow_color = shadow_settings.get('color', '#000000')
+                
+                # Draw shadow
+                shadow_x = centered_x + shadow_offset[0]
+                shadow_y = centered_y + shadow_offset[1]
+                
+                draw.text((shadow_x, shadow_y), text, fill=shadow_color, font=font)
+            
+            # Draw the main text
+            draw.text((centered_x, centered_y), text, fill=color, font=font)
 
     def _hex_to_rgba(self, hex_color: str) -> Tuple[int, int, int, int]:
         """Convert hex color to RGBA tuple"""
@@ -652,96 +519,105 @@ class CompositionService:
         font_name: str = "Impact",  # Changed default font for dramatic effect
         effects: Dict[str, Any] = None  # New parameter for text effects
     ) -> Tuple[str, dict]:
-        """Add text to a background image with options for effects"""
-        # Load the background image
-        if background_path.startswith('http'):
-            background = await self._get_image_from_url(background_path)
-        else:
-            background = Image.open(background_path).convert('RGBA')
+        """
+        Add text to an image at a specific position
+        
+        Args:
+            background_path: Path to the background image
+            text: Text to add
+            position: Dictionary with x and y coordinates
+            font_size: Font size in points
+            color: Text color in hex format
+            font_name: Font name
+            effects: Dictionary with text effects settings
             
-        # Log image dimensions to help diagnose positioning issues
-        logging.info(f"Original background dimensions: {background.size}")
+        Returns:
+            Path to the image with text added
+        """
+        logger.info(f"Adding text '{text}' to background image: {background_path}")
+        logger.info(f"Using font: {font_name}, size: {font_size}, position: {position}")
+        
+        try:
+            # Resolve the image path
+            resolved_path = await self._resolve_image_path(background_path)
+            logger.info(f"Resolved background path to: {resolved_path}")
             
-        # Create a drawing canvas
-        canvas = background.copy()
-        draw = ImageDraw.Draw(canvas)
+            # Open the background image
+            background = Image.open(resolved_path).convert('RGBA')
             
-        # Get the font
-        font = self._get_font(font_name, font_size)
+            # Log image dimensions to help diagnose positioning issues
+            logging.info(f"Original background dimensions: {background.size}")
             
-        # Calculate text size
-        text_bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        
-        # Extract position coordinates and ensure they're integers
-        pos_x = int(position.get('x', 10))
-        pos_y = int(position.get('y', 10))
-        
-        # Log the text position for debugging
-        logging.info(f"Rendering text at position: x={pos_x}, y={pos_y}, font_size={font_size}")
-        
-        # IMPORTANT: Adjust the position to account for text rendering at baseline
-        # This makes the text position more accurately match what the user expects
-        # Text is rendered from its left baseline, not from top-left of its bounding box
-        # The adjustment centers the text on the specified position
-        adjusted_pos_x = pos_x - text_width // 2
-        
-        # VERTICAL POSITIONING FIX: Add a slight upward adjustment to match frontend preview
-        # The vertical adjustment now includes a small factor to match how CSS positions text 
-        vertical_adjustment_factor = 0.375  # 10% upward shift to match CSS centering (increased from 5%)
-        vertical_adjustment = int(text_height * vertical_adjustment_factor)
-        adjusted_pos_y = pos_y - text_height // 2 - vertical_adjustment
-        
-        logging.info(f"Text dimensions: width={text_width}, height={text_height}")
-        logging.info(f"Adjusted position: x={adjusted_pos_x}, y={adjusted_pos_y} (with {vertical_adjustment}px vertical adjustment)")
-        
-        # Apply text with effects using the adjusted position
-        self._apply_text_effects(
-            draw, 
-            text, 
-            (adjusted_pos_x, adjusted_pos_y), 
-            font, 
-            color, 
-            effects
-        )
-        
-        # Save the result
-        processed_dir = Path("uploads/processed")
-        processed_dir.mkdir(exist_ok=True)
-        
-        # Generate a unique filename based on the original path
-        base_name = os.path.basename(background_path)
-        base_name_without_ext = os.path.splitext(base_name)[0]
-        text_path = processed_dir / f"{base_name_without_ext}_text_{int(time.time())}.png"
-        
-        # Save locally
-        canvas.save(text_path, "PNG")
-        
-        # Log the path of the saved image
-        logging.info(f"Saved text image to: {text_path}")
-        
-        # Upload to cloud storage
-        cloud_url = await self.cloudinary.upload_image(str(text_path))
-        
-        # Store the original (non-adjusted) position in the return info
-        # This ensures the frontend gets back the same position it sent
-        return str(text_path), {
-            "path": str(text_path),
-            "cloud_url": cloud_url,
-            "text_size": {
-                "width": text_width,
-                "height": text_height
-            },
-            "position": {
-                "x": pos_x,
-                "y": pos_y
-            },
-            "image_size": {
-                "width": background.width,
-                "height": background.height
+            # Create a drawing canvas
+            canvas = background.copy()
+            draw = ImageDraw.Draw(canvas)
+            
+            # Get the font
+            font = self._get_font(font_name, font_size)
+            
+            # Calculate text size for info purposes
+            text_bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            # Extract position coordinates and ensure they're integers
+            pos_x = int(position.get('x', 10))
+            pos_y = int(position.get('y', 10))
+            
+            # Log the text position for debugging
+            logging.info(f"Rendering text at position: x={pos_x}, y={pos_y}, font_size={font_size}")
+            logging.info(f"Text dimensions: width={text_width}, height={text_height}")
+            
+            # Apply text with effects using position coordinates
+            # Note: position adjustment is handled inside _apply_text_effects
+            self._apply_text_effects(
+                draw, 
+                text, 
+                (pos_x, pos_y), 
+                font, 
+                color, 
+                effects
+            )
+            
+            # Save the result
+            processed_dir = Path("uploads/processed")
+            processed_dir.mkdir(exist_ok=True)
+            
+            # Generate a unique filename based on the original path
+            base_name = os.path.basename(background_path)
+            base_name_without_ext = os.path.splitext(base_name)[0]
+            text_path = processed_dir / f"{base_name_without_ext}_text_{int(time.time())}.png"
+            
+            # Save locally
+            canvas.save(text_path, "PNG")
+            
+            # Log the path of the saved image
+            logging.info(f"Saved text image to: {text_path}")
+            
+            # Upload to cloud storage
+            cloud_url = await self.s3.upload_image(str(text_path))
+            
+            # Store the original (non-adjusted) position in the return info
+            # This ensures the frontend gets back the same position it sent
+            return str(text_path), {
+                "path": str(text_path),
+                "cloud_url": cloud_url,
+                "text_size": {
+                    "width": text_width,
+                    "height": text_height
+                },
+                "position": {
+                    "x": pos_x,
+                    "y": pos_y
+                },
+                "image_size": {
+                    "width": background.width,
+                    "height": background.height
+                }
             }
-        }
+        except Exception as e:
+            logging.error(f"Error in add_text: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to add text: {str(e)}")
 
     async def add_dramatic_text(
         self,
@@ -755,63 +631,57 @@ class CompositionService:
         to_uppercase: bool = False,  # Make uppercase conversion optional
         effects: Dict[str, Any] = None  # Added effects parameter
     ) -> Tuple[str, dict]:
-        """Add dramatic, stylized text to the background with advanced effects"""
+        """
+        Add dramatic impact-style text to the image
+        
+        Args:
+            background_path: Path to the background image
+            text: Text to add
+            position: Dictionary with x and y coordinates
+            font_size: Font size in points
+            color: Text color in hex format
+            font_name: Font name (defaults to Anton for dramatic effect)
+            with_period: Whether to add a period at the end of the text
+            to_uppercase: Whether to convert the text to uppercase
+            effects: Dictionary with text effects settings
+            
+        Returns:
+            Path to the image with dramatic text added
+        """
         try:
-            # Validate input
-            if not background_path:
-                raise ValueError("Background path is required")
+            # Apply transformations to the text
+            processed_text = text
             
-            # Ensure text is a string
-            if not text:
-                text = "SAMPLE TEXT"
-            
-            # Add a period if requested and not already present
-            if with_period and not text.endswith('.'):
-                text = text + '.'
-            
-            # Convert text to uppercase only if requested
+            # Apply uppercase conversion if requested
             if to_uppercase:
-                text = text.upper()
+                processed_text = processed_text.upper()
+                
+            # Add period if requested and not already ending with punctuation
+            if with_period and not processed_text[-1] in ".!?":
+                processed_text = processed_text + "."
+                
+            # Use standard text effect for dramatic text
+            shadow_effect = {
+                "type": "shadow",
+                "settings": {
+                    "offset": [5, 5],
+                    "color": "#000000",
+                    "opacity": 0.5,
+                    "blur": 3
+                }
+            }
             
-            # Ensure position is properly formatted
-            if not position or not isinstance(position, dict):
-                position = {"x": 100, "y": 100}
-                logging.warning(f"Invalid position format: {position}, using default")
-            
-            # Ensure x and y are numbers
-            try:
-                x = int(position.get("x", 100))
-                y = int(position.get("y", 100))
-            except (ValueError, TypeError):
-                x, y = 100, 100
-                logging.warning(f"Invalid position values: {position}, using default coordinates")
-            
-            position = {"x": x, "y": y}
-            
-            # Only apply minimal effects if none are provided
-            if effects is None:
-                # No default effects - let the text render as is
-                effects = {}
-            else:
-                # Ensure shadow offset is properly formatted if it exists
-                if 'shadow' in effects and 'offset' in effects['shadow']:
-                    offset = effects['shadow']['offset']
-                    # Make sure it's a tuple of two integers
-                    if isinstance(offset, (list, tuple)) and len(offset) >= 2:
-                        effects['shadow']['offset'] = (int(offset[0]), int(offset[1]))
-                    else:
-                        # Default if format is wrong
-                        effects['shadow']['offset'] = (6, 6)
-            
-            # Call the base add_text method with our modifications
+            # Use provided effects or default to shadow
+            final_effects = effects if effects else shadow_effect
+                
             result, info = await self.add_text(
-                background_path,
-                text,
-                position,
-                font_size,
-                color,
-                font_name,
-                effects
+                background_path=background_path,
+                text=processed_text,
+                position=position,
+                font_size=font_size,
+                color=color,
+                font_name=font_name,
+                effects=final_effects
             )
             
             return result, info
@@ -826,48 +696,43 @@ class CompositionService:
         blend_mode: str = 'normal',  # Added parameter for blend mode
         blend_opacity: float = 1.0  # Added parameter for opacity
     ) -> str:
-        """Combine background with text and foreground subject"""
+        """
+        Compose the final image by overlaying the foreground on top of the background with text
+        
+        Args:
+            background_with_text_path: Path to the background image with text
+            foreground_path: Path to the foreground image
+            blend_mode: Blend mode for composition
+            blend_opacity: Opacity for the blend
+            
+        Returns:
+            Path to the final composed image
+        """
         try:
-            logging.info(f"Composing final image: bg={background_with_text_path}, fg={foreground_path}")
+            # Resolve the image paths
+            background_resolved = await self._resolve_image_path(background_with_text_path)
+            foreground_resolved = await self._resolve_image_path(foreground_path)
             
             # Load the images
-            if background_with_text_path.startswith('http'):
-                background_with_text = await self._get_image_from_url(background_with_text_path)
-            else:
-                background_with_text = Image.open(background_with_text_path).convert('RGBA')
+            background = Image.open(background_resolved).convert('RGBA')
+            foreground = Image.open(foreground_resolved).convert('RGBA')
             
-            if foreground_path.startswith('http'):
-                foreground = await self._get_image_from_url(foreground_path)
-            else:
-                foreground = Image.open(foreground_path).convert('RGBA')
+            # Resize foreground to match background if needed
+            if foreground.size != background.size:
+                foreground = foreground.resize(background.size, Image.Resampling.LANCZOS)
             
-            logging.info(f"Background with text size: {background_with_text.size}, mode: {background_with_text.mode}")
-            logging.info(f"Foreground size: {foreground.size}, mode: {foreground.mode}")
+            # Create a composite
+            result = Image.alpha_composite(background, foreground)
             
-            # Ensure foreground is the same size as background
-            if foreground.size != background_with_text.size:
-                logging.info(f"Resizing foreground from {foreground.size} to {background_with_text.size}")
-                foreground = foreground.resize(background_with_text.size, Image.LANCZOS)
+            # Create a unique filename for the result
+            timestamp = int(time.time())
+            result_path = Path(f"uploads/public/composed_{timestamp}.png")
+            result.save(result_path)
             
-            # Create the final composite - THIS IS THE KEY CHANGE:
-            # Instead of manipulating numpy arrays, we'll use PIL's alpha_composite which 
-            # properly handles transparency and preserves layers
-            final_image = background_with_text.copy()
+            # Upload to S3 and get public URL
+            result_info = await self.s3.upload_image(result_path)
             
-            # Now paste the foreground on top with its alpha mask
-            # This ensures the foreground is placed ON TOP of the background+text
-            final_image.paste(foreground, (0, 0), foreground)
-            
-            # Save the composed image
-            processed_dir = Path("uploads/processed")
-            processed_dir.mkdir(exist_ok=True)
-            composed_path = processed_dir / f"composed_{int(time.time())}.png"
-            final_image.save(composed_path, "PNG")
-            
-            # Upload to cloud storage
-            cloud_url = await self.cloudinary.upload_image(str(composed_path))
-            
-            return str(composed_path)
+            return result_info['url']
         except Exception as e:
             logging.error(f"Error in compose_final_image: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to compose final image: {str(e)}")
@@ -1002,87 +867,67 @@ class CompositionService:
         background.save(template_path, "PNG")
         
         # Upload to cloud storage
-        cloud_url = await self.cloudinary.upload_image(str(template_path))
+        cloud_url = await self.s3.upload_image(str(template_path))
         
         return cloud_url
 
     async def add_multiple_text_layers(self, background_path: str, text_layers: List['TextLayer']) -> str:
-        """Add multiple text layers to a background"""
+        """
+        Add multiple text layers to a background image
+        
+        Args:
+            background_path: Path to the background image
+            text_layers: List of TextLayer objects
+            
+        Returns:
+            Path to the image with all text layers added
+        """
         try:
-            # Load the background image
-            if background_path.startswith('http'):
-                background = await self._get_image_from_url(background_path)
-            else:
-                background = Image.open(background_path).convert('RGBA')
+            # Resolve the background path
+            resolved_path = await self._resolve_image_path(background_path)
             
-            # Create a drawing canvas
-            canvas = background.copy()
-            draw = ImageDraw.Draw(canvas)
+            # Open the background image
+            background = Image.open(resolved_path).convert('RGBA')
+            logger.info(f"Loaded background image: {resolved_path}, size: {background.size}")
             
-            # Log the number of text layers
-            logging.info(f"Processing {len(text_layers)} text layers")
+            # Create a draw object
+            draw = ImageDraw.Draw(background)
             
-            # Add each text layer
+            # Process each text layer
             for i, layer in enumerate(text_layers):
-                # Extract style information
-                font_size = layer.style.get('font_size', 120)
-                color = layer.style.get('color', '#FFFFFF')
-                font_name = layer.style.get('font_name', 'impact')
-                effects = layer.style.get('effects', None)
+                text = layer.text
                 
-                # Log layer details
-                logging.info(f"Layer {i+1}: text='{layer.text}', position={layer.position}, font={font_name}, size={font_size}")
-                
-                # Get font
-                font = self._get_font(font_name, font_size)
-                
-                # Get text position
+                # Get position as a tuple directly from the layer
                 pos_x = int(layer.position.get('x', 10))
                 pos_y = int(layer.position.get('y', 10))
+                position = (pos_x, pos_y)
                 
-                # Calculate text size for centering
-                text_bbox = draw.textbbox((0, 0), layer.text, font=font)
-                text_width = text_bbox[2] - text_bbox[0]
-                text_height = text_bbox[3] - text_bbox[1]
+                # Extract style properties with defaults
+                font_size = layer.style.get('font_size', 120)
+                color = layer.style.get('color', '#FFFFFF')
+                font_name = layer.style.get('font_name', 'anton')
+                effects = layer.style.get('effects', None)
                 
-                # Center the text on the specified position
-                adjusted_pos_x = pos_x - text_width // 2
+                # Log text layer details
+                logger.info(f"Processing text layer {i+1}: text='{text}', position={position}, font={font_name}, size={font_size}")
                 
-                # VERTICAL POSITIONING FIX: Add a slight upward adjustment to match frontend preview
-                # The vertical adjustment now includes a small factor to match how CSS positions text
-                vertical_adjustment_factor = 0.10  # 10% upward shift to match CSS centering (increased from 5%)
-                vertical_adjustment = int(text_height * vertical_adjustment_factor)
-                adjusted_pos_y = pos_y - text_height // 2 - vertical_adjustment
+                # Get the font
+                font = self._get_font(font_name, font_size)
                 
-                logging.info(f"Layer {i+1} adjusted position: x={adjusted_pos_x}, y={adjusted_pos_y}")
-                
-                # Apply text with effects
-                self._apply_text_effects(
-                    draw, 
-                    layer.text, 
-                    (adjusted_pos_x, adjusted_pos_y), 
-                    font, 
-                    color, 
-                    effects
-                )
+                # Apply text effects - position adjustment happens inside this method
+                self._apply_text_effects(draw, text, position, font, color, effects)
             
             # Save the result
-            processed_dir = Path("uploads/processed")
-            processed_dir.mkdir(exist_ok=True)
+            timestamp = int(time.time())
+            result_path = Path(f"uploads/public/multilayer_{timestamp}.png")
+            background.save(result_path)
+            logger.info(f"Saved multilayer image to: {result_path}")
             
-            # Generate a unique filename
-            text_path = processed_dir / f"multilayer_text_{int(time.time())}.png"
+            # Upload to S3 and get public URL
+            result_info = await self.s3.upload_image(result_path)
+            logger.info(f"Uploaded multilayer image to S3: {result_info['url']}")
             
-            # Save locally
-            canvas.save(text_path, "PNG")
-            logging.info(f"Saved multi-layer text image to: {text_path}")
-            
-            # Upload to cloud storage
-            cloud_result = await self.cloudinary.upload_image(str(text_path))
-            
-            # Return the Cloudinary URL instead of the local path
-            return cloud_result["url"]
-            
+            return result_info['url']
         except Exception as e:
             logging.error(f"Error in add_multiple_text_layers: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to add multiple text layers: {str(e)}")
