@@ -7,6 +7,14 @@ import { Move, ZoomIn, Type, Info, Plus, Minus, Settings, Sliders, ChevronDown, 
 import { MdCenterFocusStrong } from "react-icons/md"
 import { motion } from "framer-motion"
 
+// Add types for shadow effect
+interface ShadowEffectSettings {
+  offset: number[];
+  color: string;
+  opacity: number;
+  blur: number;
+}
+
 interface LiveTextEditorProps {
   backgroundImage: string | null
   text: string
@@ -22,6 +30,8 @@ interface LiveTextEditorProps {
   fontColor: string
   onFontColorChange: (color: string) => void
   disabled: boolean
+  shadowEffect?: ShadowEffectSettings
+  onShadowEffectChange?: (settings: ShadowEffectSettings) => void
 }
 
 // Tab type for editor settings
@@ -91,6 +101,94 @@ const getFullImageUrl = (url: string | null): string | null => {
   return url
 }
 
+// Add ShadowEffectControls component
+const ShadowEffectControls: React.FC<{
+  settings: ShadowEffectSettings;
+  onChange: (settings: ShadowEffectSettings) => void;
+}> = ({ settings, onChange }) => {
+  // Create a new settings object with defaults for any missing values
+  const currentSettings: ShadowEffectSettings = {
+    offset: [5, 5],
+    color: '#000000',
+    opacity: 0.5,
+    blur: 3,
+  };
+
+  // Override defaults with any provided settings
+  if (settings) {
+    if (settings.offset) currentSettings.offset = settings.offset;
+    if (settings.color) currentSettings.color = settings.color;
+    if (settings.opacity !== undefined) currentSettings.opacity = settings.opacity;
+    if (settings.blur !== undefined) currentSettings.blur = settings.blur;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-sm text-white/60">Offset X</label>
+          <input
+            type="number"
+            value={currentSettings.offset[0]}
+            onChange={(e) => {
+              const newOffset = [...currentSettings.offset];
+              newOffset[0] = Number(e.target.value);
+              onChange({ ...currentSettings, offset: newOffset });
+            }}
+            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
+          />
+        </div>
+        <div>
+          <label className="text-sm text-white/60">Offset Y</label>
+          <input
+            type="number"
+            value={currentSettings.offset[1]}
+            onChange={(e) => {
+              const newOffset = [...currentSettings.offset];
+              newOffset[1] = Number(e.target.value);
+              onChange({ ...currentSettings, offset: newOffset });
+            }}
+            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-sm text-white/60">Shadow Color</label>
+        <input
+          type="color"
+          value={currentSettings.color}
+          onChange={(e) => onChange({ ...currentSettings, color: e.target.value })}
+          className="w-full h-8 bg-white/5 border border-white/10 rounded"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-white/60">Opacity ({Math.round(currentSettings.opacity * 100)}%)</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          value={currentSettings.opacity}
+          onChange={(e) => onChange({ ...currentSettings, opacity: Number(e.target.value) })}
+          className="w-full"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-white/60">Blur ({currentSettings.blur}px)</label>
+        <input
+          type="range"
+          min="0"
+          max="10"
+          step="1"
+          value={currentSettings.blur}
+          onChange={(e) => onChange({ ...currentSettings, blur: Number(e.target.value) })}
+          className="w-full"
+        />
+      </div>
+    </div>
+  );
+};
+
 const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   backgroundImage,
   text,
@@ -106,6 +204,8 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   fontColor,
   onFontColorChange,
   disabled,
+  shadowEffect,
+  onShadowEffectChange,
 }) => {
   const [localText, setLocalText] = useState(text)
   const [isDraggingText, setIsDraggingText] = useState(false)
@@ -598,6 +698,23 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     // Get font-specific adjustments to improve preview accuracy
     const { widthFactor, heightFactor } = getFontMetrics(fontName)
 
+    // Calculate text shadow if shadow effect is enabled
+    let textShadow = 'none';
+    if (shadowEffect) {
+      const { offset, color, opacity, blur } = shadowEffect;
+      // Scale the offset and blur based on the preview scale
+      const scaledOffsetX = offset[0] / scale;
+      const scaledOffsetY = offset[1] / scale;
+      const scaledBlur = blur / scale;
+      
+      // Convert hex color to rgba
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      
+      textShadow = `${scaledOffsetX}px ${scaledOffsetY}px ${scaledBlur}px rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+
     return {
       fontFamily:
         fontName === "anton"
@@ -611,7 +728,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
       lineHeight: "1",
       fontWeight: fontName === "arial_bold" || fontName === "helvetica_bold" ? "bold" : "normal",
       color: fontColor,
-      textShadow: "2px 2px 8px rgba(0, 0, 0, 0.5)",
+      textShadow,
       cursor: isDraggingText ? "grabbing" : "grab",
       position: "absolute" as const,
       top: `${previewPos.y}px`,
@@ -623,8 +740,8 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
       padding: "0",
       margin: "0",
       letterSpacing: fontName === "anton" ? "0.01em" : "normal",
-      opacity: isDraggingText ? 0.8 : 1, // Add opacity during drag for visual feedback
-      transition: "opacity 0.1s ease", // Smooth transition for opacity
+      opacity: isDraggingText ? 0.8 : 1,
+      transition: "opacity 0.1s ease",
     }
   }
 
@@ -734,7 +851,23 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
                 />
               </div>
             </div>
-            
+
+            {/* Add Shadow Effect Controls */}
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Shadow Effect
+              </label>
+              <ShadowEffectControls
+                settings={shadowEffect || {
+                  offset: [5, 5],
+                  color: '#000000',
+                  opacity: 0.5,
+                  blur: 3
+                }}
+                onChange={onShadowEffectChange || (() => {})}
+              />
+            </div>
+
             {/* Center text button for mobile */}
             <div className="pt-2">
               <button

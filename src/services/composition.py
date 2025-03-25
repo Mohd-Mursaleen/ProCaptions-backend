@@ -321,10 +321,10 @@ class CompositionService:
                         # Draw the outline text
                         draw.text(
                             (centered_x + offset_x, centered_y + offset_y),
-                            text,
+                                    text, 
                             fill=outline_rgba,
-                            font=font
-                        )
+                                    font=font
+                                )
                 
                 # Draw the main text on top
                 draw.text((centered_x, centered_y), text, fill=color, font=font)
@@ -538,24 +538,24 @@ class CompositionService:
         logger.info(f"Using font: {font_name}, size: {font_size}, position: {position}")
         
         try:
-            # Resolve the image path
+                # Resolve the image path
             resolved_path = await self._resolve_image_path(background_path)
             logger.info(f"Resolved background path to: {resolved_path}")
-            
-            # Open the background image
+                
+                # Open the background image
             background = Image.open(resolved_path).convert('RGBA')
-            
+             
             # Log image dimensions to help diagnose positioning issues
             logging.info(f"Original background dimensions: {background.size}")
-            
+                
             # Create a drawing canvas
             canvas = background.copy()
             draw = ImageDraw.Draw(canvas)
-            
+                
             # Get the font
             font = self._get_font(font_name, font_size)
-            
-            # Calculate text size for info purposes
+                
+                # Calculate text size for info purposes
             text_bbox = draw.textbbox((0, 0), text, font=font)
             text_width = text_bbox[2] - text_bbox[0]
             text_height = text_bbox[3] - text_bbox[1]
@@ -568,12 +568,12 @@ class CompositionService:
             logging.info(f"Rendering text at position: x={pos_x}, y={pos_y}, font_size={font_size}")
             logging.info(f"Text dimensions: width={text_width}, height={text_height}")
             
-            # Apply text with effects using position coordinates
-            # Note: position adjustment is handled inside _apply_text_effects
+                # Apply text with effects using position coordinates
+                # Note: position adjustment is handled inside _apply_text_effects
             self._apply_text_effects(
                 draw, 
                 text, 
-                (pos_x, pos_y), 
+                    (pos_x, pos_y), 
                 font, 
                 color, 
                 effects
@@ -666,8 +666,8 @@ class CompositionService:
                 "settings": {
                     "offset": [5, 5],
                     "color": "#000000",
-                    "opacity": 0.5,
-                    "blur": 3
+                    "opacity": 0.3,
+                    "blur": 10
                 }
             }
             

@@ -1,8 +1,7 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect, useRef } from "react"
-import type { Position, TextLayer, TextLayerStyle } from "../types/api"
+import React, { useState, useRef, useEffect } from 'react';
+import type { Position, TextLayer, TextLayerStyle, ShadowEffectSettings, EffectSettings, OutlineEffectSettings, GlowEffectSettings, ThreeDEffectSettings, EffectType } from "../types/api"
 import { Plus, X, ArrowUp, ArrowDown, Move, Minus, Type, Settings, ChevronDown, Layers } from "lucide-react"
 import { MdCenterFocusStrong } from "react-icons/md"
 import { motion } from "framer-motion"
@@ -38,7 +37,7 @@ const DEFAULT_LAYER_STYLE: TextLayerStyle = {
   }
 };
 
-const EFFECT_TYPES = [
+const EFFECT_TYPES: Array<{ value: EffectType; label: string }> = [
   { value: 'none', label: 'None' },
   { value: 'shadow', label: 'Shadow' },
   { value: 'outline', label: 'Outline' },
@@ -71,6 +70,94 @@ const getFullImageUrl = (url: string | null): string | null => {
   
   // In other cases, return as is
   return url;
+};
+
+// Add shadow effect controls component
+const ShadowEffectControls: React.FC<{
+  settings: ShadowEffectSettings;
+  onChange: (settings: ShadowEffectSettings) => void;
+}> = ({ settings, onChange }) => {
+  // Create a new settings object with defaults for any missing values
+  const currentSettings: ShadowEffectSettings = {
+    offset: [5, 5],
+    color: '#000000',
+    opacity: 0.5,
+    blur: 3,
+  };
+
+  // Override defaults with any provided settings
+  if (settings) {
+    if (settings.offset) currentSettings.offset = settings.offset;
+    if (settings.color) currentSettings.color = settings.color;
+    if (settings.opacity !== undefined) currentSettings.opacity = settings.opacity;
+    if (settings.blur !== undefined) currentSettings.blur = settings.blur;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-sm text-white/60">Offset X</label>
+          <input
+            type="number"
+            value={currentSettings.offset[0]}
+            onChange={(e) => {
+              const newOffset = [...currentSettings.offset];
+              newOffset[0] = Number(e.target.value);
+              onChange({ ...currentSettings, offset: newOffset });
+            }}
+            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
+          />
+        </div>
+        <div>
+          <label className="text-sm text-white/60">Offset Y</label>
+          <input
+            type="number"
+            value={currentSettings.offset[1]}
+            onChange={(e) => {
+              const newOffset = [...currentSettings.offset];
+              newOffset[1] = Number(e.target.value);
+              onChange({ ...currentSettings, offset: newOffset });
+            }}
+            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-sm text-white/60">Shadow Color</label>
+        <input
+          type="color"
+          value={currentSettings.color}
+          onChange={(e) => onChange({ ...currentSettings, color: e.target.value })}
+          className="w-full h-8 bg-white/5 border border-white/10 rounded"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-white/60">Opacity ({Math.round(currentSettings.opacity * 100)}%)</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          value={currentSettings.opacity}
+          onChange={(e) => onChange({ ...currentSettings, opacity: Number(e.target.value) })}
+          className="w-full"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-white/60">Blur ({currentSettings.blur}px)</label>
+        <input
+          type="range"
+          min="0"
+          max="10"
+          step="1"
+          value={currentSettings.blur}
+          onChange={(e) => onChange({ ...currentSettings, blur: Number(e.target.value) })}
+          className="w-full"
+        />
+      </div>
+    </div>
+  );
 };
 
 const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
@@ -434,20 +521,21 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
   };
   
   // Update a layer's effect type
-  const handleUpdateEffectType = (index: number, effectType: string) => {
+  const handleUpdateEffectType = (index: number, effectType: EffectType) => {
     const newLayers = [...layers];
+    const layer = newLayers[index];
     
-    // If 'none', remove the effects property
+    if (!layer.style) {
+      layer.style = {};
+    }
+    
     if (effectType === 'none') {
-      if (newLayers[index].style && 'effects' in newLayers[index].style) {
-        const { effects, ...styleWithoutEffects } = newLayers[index].style as any;
-        newLayers[index].style = styleWithoutEffects;
-      }
+      // Remove effects
+      delete layer.style.effects;
     } else {
-      // Otherwise, set the new effect type with default settings
-      let settings = {};
-      
       // Set default settings based on effect type
+      let settings: EffectSettings | undefined;
+      
       switch (effectType) {
         case 'shadow':
           settings = {
@@ -455,21 +543,21 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
             color: '#000000',
             opacity: 0.5,
             blur: 3
-          };
+          } as ShadowEffectSettings;
           break;
         case 'outline':
           settings = {
             width: 2,
             color: '#000000',
             opacity: 1.0
-          };
+          } as OutlineEffectSettings;
           break;
         case 'glow':
           settings = {
             color: '#FFFFFF',
             radius: 10,
             opacity: 0.7
-          };
+          } as GlowEffectSettings;
           break;
         case '3d_depth':
           settings = {
@@ -477,17 +565,16 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
             angle: 45,
             distance: 2,
             color_gradient: ['#333333', '#666666', '#999999']
-          };
+          } as ThreeDEffectSettings;
           break;
       }
       
-      newLayers[index].style = {
-        ...newLayers[index].style,
-        effects: {
+      if (settings) {
+        layer.style.effects = {
           type: effectType,
           settings
-        }
-      };
+        };
+      }
     }
     
     setLayers(newLayers);
@@ -515,6 +602,29 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     
     const fontName = layer.style?.font_name || 'anton';
     
+    // Get shadow effect settings
+    const effects = layer.style?.effects;
+    const shadowEffect = effects && effects.type === 'shadow' 
+      ? effects.settings as ShadowEffectSettings 
+      : null;
+    
+    // Create text shadow based on effect settings
+    let textShadow = 'none';
+    if (shadowEffect) {
+      const { offset, color, opacity, blur } = shadowEffect;
+      // Scale the offset and blur based on the preview scale
+      const scaledOffsetX = offset[0] * scaleY;
+      const scaledOffsetY = offset[1] * scaleY;
+      const scaledBlur = blur * scaleY;
+      
+      // Convert hex color to rgba
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      
+      textShadow = `${scaledOffsetX}px ${scaledOffsetY}px ${scaledBlur}px rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    
     return {
       fontFamily: fontName === 'anton' 
         ? "Anton, sans-serif" 
@@ -529,7 +639,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
       top: `${previewPos.y}px`,
       left: `${previewPos.x}px`,
       transform: 'translate(-50%, -50%)',
-      textShadow: '2px 2px 8px rgba(0,0,0,0.5)',
+      textShadow,
       cursor: dragState.isDragging && dragState.layerIndex === index ? 'grabbing' : 'grab',
       userSelect: 'none',
       zIndex: index + 10,
@@ -813,6 +923,48 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 />
               </div>
             </div>
+
+            {/* Add Effect Type Selector */}
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-2">
+                Text Effect
+              </label>
+              <select
+                value={layers[selectedLayerIndex].style?.effects?.type || 'none'}
+                onChange={(e) => handleUpdateEffectType(selectedLayerIndex, e.target.value as EffectType)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                disabled={disabled}
+              >
+                {EFFECT_TYPES.map(effect => (
+                  <option key={effect.value} value={effect.value}>
+                    {effect.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Show Shadow Effect Controls when shadow effect is selected */}
+            {layers[selectedLayerIndex].style?.effects?.type === 'shadow' && (
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Shadow Settings
+                </label>
+                <ShadowEffectControls
+                  settings={layers[selectedLayerIndex].style?.effects?.settings as ShadowEffectSettings}
+                  onChange={(newSettings) => {
+                    const newLayers = [...layers];
+                    if (!newLayers[selectedLayerIndex].style) {
+                      newLayers[selectedLayerIndex].style = {};
+                    }
+                    newLayers[selectedLayerIndex].style.effects = {
+                      type: 'shadow',
+                      settings: newSettings
+                    };
+                    setLayers(newLayers);
+                  }}
+                />
+              </div>
+            )}
             
             {/* Center text button for mobile */}
             <div className="pt-2">

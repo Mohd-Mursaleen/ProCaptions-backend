@@ -83,43 +83,38 @@ export interface TextMetrics {
   image_size: ImageSize;
 }
 
-// Shadow Effect Settings
+// Effect Settings Types
 export interface ShadowEffectSettings {
-  offset?: number[];
-  color?: string;
-  opacity?: number;
-  blur?: number;
+  offset: number[];
+  color: string;
+  opacity: number;
+  blur: number;
 }
 
-// Outline Effect Settings
 export interface OutlineEffectSettings {
-  width?: number;
-  color?: string;
-  opacity?: number;
+  width: number;
+  color: string;
+  opacity: number;
 }
 
-// Glow Effect Settings
 export interface GlowEffectSettings {
-  color?: string;
-  radius?: number;
-  opacity?: number;
+  color: string;
+  radius: number;
+  opacity: number;
 }
 
-// 3D Effect Settings
 export interface ThreeDEffectSettings {
-  layers?: number;
-  angle?: number;
-  distance?: number;
-  color_gradient?: string[];
+  layers: number;
+  angle: number;
+  distance: number;
+  color_gradient: string[];
 }
 
-// Effect Settings Union
-export type EffectSettings = 
-  | ShadowEffectSettings
-  | OutlineEffectSettings
-  | GlowEffectSettings
-  | ThreeDEffectSettings
-  | Record<string, any>;
+// Union type for all effect settings
+export type EffectSettings = ShadowEffectSettings | OutlineEffectSettings | GlowEffectSettings | ThreeDEffectSettings;
+
+// Effect type
+export type EffectType = 'shadow' | 'outline' | 'glow' | '3d_depth' | 'none';
 
 // TextLayer Style
 export interface TextLayerStyle {
@@ -127,7 +122,7 @@ export interface TextLayerStyle {
   color?: string;
   font_name?: string;
   effects?: {
-    type?: string;
+    type: EffectType;
     settings?: EffectSettings;
   };
 }
