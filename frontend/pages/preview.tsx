@@ -87,7 +87,8 @@ const PreviewPage: NextPage = () => {
           fontSize: txtSettings.fontSize,
           fontName: txtSettings.fontName,
           withPeriod: txtSettings.withPeriod,
-          fontColor: txtSettings.fontColor
+          fontColor: txtSettings.fontColor,
+          shadowEffect: txtSettings.shadowEffect
         });
         
         textResult = await addDramaticText({
@@ -97,7 +98,11 @@ const PreviewPage: NextPage = () => {
           font_size: txtSettings.fontSize,
           font_name: txtSettings.fontName,
           with_period: txtSettings.withPeriod,
-          color: txtSettings.fontColor
+          color: txtSettings.fontColor,
+          effects: txtSettings.shadowEffect ? {
+            type: 'shadow',
+            settings: txtSettings.shadowEffect
+          } : undefined
         });
       }
       
