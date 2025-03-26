@@ -72,94 +72,6 @@ const getFullImageUrl = (url: string | null): string | null => {
   return url;
 };
 
-// Add shadow effect controls component
-const ShadowEffectControls: React.FC<{
-  settings: ShadowEffectSettings;
-  onChange: (settings: ShadowEffectSettings) => void;
-}> = ({ settings, onChange }) => {
-  // Create a new settings object with defaults for any missing values
-  const currentSettings: ShadowEffectSettings = {
-    offset: [5, 5],
-    color: '#000000',
-    opacity: 0.5,
-    blur: 3,
-  };
-
-  // Override defaults with any provided settings
-  if (settings) {
-    if (settings.offset) currentSettings.offset = settings.offset;
-    if (settings.color) currentSettings.color = settings.color;
-    if (settings.opacity !== undefined) currentSettings.opacity = settings.opacity;
-    if (settings.blur !== undefined) currentSettings.blur = settings.blur;
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-sm text-white/60">Offset X</label>
-          <input
-            type="number"
-            value={currentSettings.offset[0]}
-            onChange={(e) => {
-              const newOffset = [...currentSettings.offset];
-              newOffset[0] = Number(e.target.value);
-              onChange({ ...currentSettings, offset: newOffset });
-            }}
-            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
-          />
-        </div>
-        <div>
-          <label className="text-sm text-white/60">Offset Y</label>
-          <input
-            type="number"
-            value={currentSettings.offset[1]}
-            onChange={(e) => {
-              const newOffset = [...currentSettings.offset];
-              newOffset[1] = Number(e.target.value);
-              onChange({ ...currentSettings, offset: newOffset });
-            }}
-            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="text-sm text-white/60">Shadow Color</label>
-        <input
-          type="color"
-          value={currentSettings.color}
-          onChange={(e) => onChange({ ...currentSettings, color: e.target.value })}
-          className="w-full h-8 bg-white/5 border border-white/10 rounded"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-white/60">Opacity ({Math.round(currentSettings.opacity * 100)}%)</label>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.1"
-          value={currentSettings.opacity}
-          onChange={(e) => onChange({ ...currentSettings, opacity: Number(e.target.value) })}
-          className="w-full"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-white/60">Blur ({currentSettings.blur}px)</label>
-        <input
-          type="range"
-          min="0"
-          max="10"
-          step="1"
-          value={currentSettings.blur}
-          onChange={(e) => onChange({ ...currentSettings, blur: Number(e.target.value) })}
-          className="w-full"
-        />
-      </div>
-    </div>
-  );
-};
-
 const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
   backgroundImage,
   onLayersChange,
@@ -943,28 +855,43 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               </select>
             </div>
 
-            {/* Show Shadow Effect Controls when shadow effect is selected */}
-            {layers[selectedLayerIndex].style?.effects?.type === 'shadow' && (
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
-                  Shadow Settings
-                </label>
-                <ShadowEffectControls
-                  settings={layers[selectedLayerIndex].style?.effects?.settings as ShadowEffectSettings}
-                  onChange={(newSettings) => {
-                    const newLayers = [...layers];
-                    if (!newLayers[selectedLayerIndex].style) {
-                      newLayers[selectedLayerIndex].style = {};
-                    }
+            {/* Replace Shadow Effect Controls with a simple checkbox */}
+            <div className="flex items-center my-4">
+              <input
+                id="shadow-effect"
+                type="checkbox"
+                checked={layers[selectedLayerIndex].style?.effects?.type === 'shadow'}
+                onChange={(e) => {
+                  const newLayers = [...layers];
+                  if (!newLayers[selectedLayerIndex].style) {
+                    newLayers[selectedLayerIndex].style = {};
+                  }
+                  
+                  if (e.target.checked) {
+                    // Enable shadow with default settings
                     newLayers[selectedLayerIndex].style.effects = {
                       type: 'shadow',
-                      settings: newSettings
+                      settings: {
+                        offset: [5, 5],
+                        color: '#000000',
+                        opacity: 0.5,
+                        blur: 3
+                      }
                     };
-                    setLayers(newLayers);
-                  }}
-                />
-              </div>
-            )}
+                  } else {
+                    // Remove shadow effect
+                    delete newLayers[selectedLayerIndex].style.effects;
+                  }
+                  
+                  setLayers(newLayers);
+                }}
+                className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
+                disabled={disabled}
+              />
+              <label htmlFor="shadow-effect" className="ml-2 block text-sm text-white/80">
+                Add shadow effect
+              </label>
+            </div>
             
             {/* Center text button for mobile */}
             <div className="pt-2">

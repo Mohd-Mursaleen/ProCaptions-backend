@@ -659,20 +659,10 @@ class CompositionService:
             # Add period if requested and not already ending with punctuation
             if with_period and not processed_text[-1] in ".!?":
                 processed_text = processed_text + "."
-                
-            # Use standard text effect for dramatic text
-            shadow_effect = {
-                "type": "shadow",
-                "settings": {
-                    "offset": [5, 5],
-                    "color": "#000000",
-                    "opacity": 0.3,
-                    "blur": 10
-                }
-            }
             
-            # Use provided effects or default to shadow
-            final_effects = effects if effects else shadow_effect
+            # Pass the effects directly without applying defaults
+            # This ensures that when effects=None, no shadow is applied
+            # Only apply the default shadow effect if explicitly requested by the client
                 
             result, info = await self.add_text(
                 background_path=background_path,
@@ -681,7 +671,7 @@ class CompositionService:
                 font_size=font_size,
                 color=color,
                 font_name=font_name,
-                effects=final_effects
+                effects=effects
             )
             
             return result, info

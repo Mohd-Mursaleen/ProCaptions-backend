@@ -4,7 +4,7 @@ import shutil
 from src.services.segmentation import SegmentationService
 from src.services.composition import CompositionService, TextLayer
 from src.services.s3_service import S3Service
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, validator
 import aiofiles
 import os
@@ -29,6 +29,7 @@ class DramaticTextRequest(BaseModel):
     color: str = "#FFFFFF"
     font_name: str = "Impact"
     with_period: bool = True
+    effects: Optional[Dict[str, Any]] = None
     
     class Config:
         # Allow extra fields to be flexible with client
@@ -161,7 +162,8 @@ async def add_dramatic_text(request: DramaticTextRequest) -> Dict[str, str]:
                 color=color,
                 font_name=font_name,
                 with_period=with_period,
-                to_uppercase=False
+                to_uppercase=False,
+                effects=request.effects
             )
             
             return {"image_with_text": path}

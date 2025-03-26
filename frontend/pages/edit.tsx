@@ -3,7 +3,7 @@ import { NextPage } from 'next';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { Position, SegmentationResponse, TextLayer } from '../types/api';
+import { Position, SegmentationResponse, TextLayer, ShadowEffectSettings } from '../types/api';
 import LiveTextEditor from '../components/LiveTextEditor';
 import TextLayersEditor from '../components/TextLayersEditor';
 import { FiLayers, FiType } from 'react-icons/fi';
@@ -22,6 +22,7 @@ const EditPage: NextPage = () => {
   const [fontName, setFontName] = useState<string>('anton');
   const [withPeriod, setWithPeriod] = useState<boolean>(true);
   const [fontColor, setFontColor] = useState<string>('#FFFFFF');
+  const [shadowEffect, setShadowEffect] = useState<ShadowEffectSettings | undefined>(undefined);
   
   // Multi-layer text settings
   const [textLayers, setTextLayers] = useState<TextLayer[]>([]);
@@ -94,6 +95,15 @@ const EditPage: NextPage = () => {
           console.log('Loading saved text layers from localStorage:', parsedSettings.textLayers);
           setTextLayers(parsedSettings.textLayers);
           setUseMultiLayer(true);
+        } else if (!parsedSettings.useMultiLayer) {
+          // Load individual text settings
+          if (parsedSettings.text) setText(parsedSettings.text);
+          if (parsedSettings.position) setPosition(parsedSettings.position);
+          if (parsedSettings.fontSize) setFontSize(parsedSettings.fontSize);
+          if (parsedSettings.fontName) setFontName(parsedSettings.fontName);
+          if (parsedSettings.withPeriod !== undefined) setWithPeriod(parsedSettings.withPeriod);
+          if (parsedSettings.fontColor) setFontColor(parsedSettings.fontColor);
+          if (parsedSettings.shadowEffect) setShadowEffect(parsedSettings.shadowEffect);
         }
       } catch (e) {
         console.error('Error parsing text settings:', e);
@@ -105,7 +115,7 @@ const EditPage: NextPage = () => {
     // Store the text settings in localStorage
     const textSettings = useMultiLayer 
       ? { textLayers, useMultiLayer }
-      : { text, position, fontSize, fontName, withPeriod, fontColor, useMultiLayer };
+      : { text, position, fontSize, fontName, withPeriod, fontColor, shadowEffect, useMultiLayer };
     
     localStorage.setItem('textSettings', JSON.stringify(textSettings));
     
@@ -254,6 +264,8 @@ const EditPage: NextPage = () => {
                   fontColor={fontColor}
                   onFontColorChange={setFontColor}
                   disabled={false}
+                  shadowEffect={shadowEffect}
+                  onShadowEffectChange={setShadowEffect}
                 />
               )}
               

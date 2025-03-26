@@ -44,6 +44,10 @@ export interface AddDramaticTextRequest {
   color?: string;
   font_name?: string;
   with_period?: boolean;
+  effects?: {
+    type: EffectType;
+    settings?: EffectSettings;
+  };
 }
 
 // Add Text Response
@@ -74,6 +78,7 @@ export interface ComposeRequest {
 // Compose Response
 export interface ComposeResponse {
   composed_image: string;
+  final_image: string;
 }
 
 // Text Metrics

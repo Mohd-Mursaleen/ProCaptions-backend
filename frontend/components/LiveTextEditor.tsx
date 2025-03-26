@@ -101,94 +101,6 @@ const getFullImageUrl = (url: string | null): string | null => {
   return url
 }
 
-// Add ShadowEffectControls component
-const ShadowEffectControls: React.FC<{
-  settings: ShadowEffectSettings;
-  onChange: (settings: ShadowEffectSettings) => void;
-}> = ({ settings, onChange }) => {
-  // Create a new settings object with defaults for any missing values
-  const currentSettings: ShadowEffectSettings = {
-    offset: [5, 5],
-    color: '#000000',
-    opacity: 0.5,
-    blur: 3,
-  };
-
-  // Override defaults with any provided settings
-  if (settings) {
-    if (settings.offset) currentSettings.offset = settings.offset;
-    if (settings.color) currentSettings.color = settings.color;
-    if (settings.opacity !== undefined) currentSettings.opacity = settings.opacity;
-    if (settings.blur !== undefined) currentSettings.blur = settings.blur;
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-sm text-white/60">Offset X</label>
-          <input
-            type="number"
-            value={currentSettings.offset[0]}
-            onChange={(e) => {
-              const newOffset = [...currentSettings.offset];
-              newOffset[0] = Number(e.target.value);
-              onChange({ ...currentSettings, offset: newOffset });
-            }}
-            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
-          />
-        </div>
-        <div>
-          <label className="text-sm text-white/60">Offset Y</label>
-          <input
-            type="number"
-            value={currentSettings.offset[1]}
-            onChange={(e) => {
-              const newOffset = [...currentSettings.offset];
-              newOffset[1] = Number(e.target.value);
-              onChange({ ...currentSettings, offset: newOffset });
-            }}
-            className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="text-sm text-white/60">Shadow Color</label>
-        <input
-          type="color"
-          value={currentSettings.color}
-          onChange={(e) => onChange({ ...currentSettings, color: e.target.value })}
-          className="w-full h-8 bg-white/5 border border-white/10 rounded"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-white/60">Opacity ({Math.round(currentSettings.opacity * 100)}%)</label>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.1"
-          value={currentSettings.opacity}
-          onChange={(e) => onChange({ ...currentSettings, opacity: Number(e.target.value) })}
-          className="w-full"
-        />
-      </div>
-      <div>
-        <label className="text-sm text-white/60">Blur ({currentSettings.blur}px)</label>
-        <input
-          type="range"
-          min="0"
-          max="10"
-          step="1"
-          value={currentSettings.blur}
-          onChange={(e) => onChange({ ...currentSettings, blur: Number(e.target.value) })}
-          className="w-full"
-        />
-      </div>
-    </div>
-  );
-};
-
 const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   backgroundImage,
   text,
@@ -692,7 +604,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
   const getTextStyle = () => {
     // Calculate the preview font size (scaled down from the original)
     const scale = getScalingFactor()
-    const previewFontSize = fontSize / scale
+    const previewFontSize = Math.round(fontSize / scale)
     const previewPos = getPreviewPosition()
 
     // Get font-specific adjustments to improve preview accuracy
@@ -702,17 +614,23 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
     let textShadow = 'none';
     if (shadowEffect) {
       const { offset, color, opacity, blur } = shadowEffect;
-      // Scale the offset and blur based on the preview scale
-      const scaledOffsetX = offset[0] / scale;
-      const scaledOffsetY = offset[1] / scale;
-      const scaledBlur = blur / scale;
+      
+      // Match the scaling approach from TextLayersEditor
+      // We use the inverse scale (1/scale) to properly scale down the shadow values
+      const inverseScale = 1/scale;
+      const scaledOffsetX = Math.round(offset[0] * inverseScale);
+      const scaledOffsetY = Math.round(offset[1] * inverseScale);
+      const scaledBlur = Math.round(blur * inverseScale);
       
       // Convert hex color to rgba
       const r = parseInt(color.slice(1, 3), 16);
       const g = parseInt(color.slice(3, 5), 16);
       const b = parseInt(color.slice(5, 7), 16);
       
-      textShadow = `${scaledOffsetX}px ${scaledOffsetY}px ${scaledBlur}px rgba(${r}, ${g}, ${b}, ${opacity})`;
+      // Ensure opacity is between 0 and 1
+      const safeOpacity = Math.max(0, Math.min(1, opacity));
+      
+      textShadow = `${scaledOffsetX}px ${scaledOffsetY}px ${scaledBlur}px rgba(${r}, ${g}, ${b}, ${safeOpacity})`;
     }
 
     return {
@@ -852,20 +770,34 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
               </div>
             </div>
 
-            {/* Add Shadow Effect Controls */}
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">
-                Shadow Effect
-              </label>
-              <ShadowEffectControls
-                settings={shadowEffect || {
-                  offset: [5, 5],
-                  color: '#000000',
-                  opacity: 0.5,
-                  blur: 3
-                }}
-                onChange={onShadowEffectChange || (() => {})}
-              />
+            {/* Add Shadow Effect Checkbox */}
+            <div className="flex items-center mb-4">
+              <div className="relative flex items-center">
+                <input
+                  id="add-shadow"
+                  type="checkbox"
+                  checked={!!shadowEffect}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      // Add default shadow effect
+                      onShadowEffectChange?.({
+                        offset: [5, 5],
+                        color: '#000000',
+                        opacity: 0.5,
+                        blur: 3
+                      });
+                    } else {
+                      // Remove shadow effect
+                      onShadowEffectChange?.(undefined as any);
+                    }
+                  }}
+                  className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
+                  disabled={disabled}
+                />
+                <label htmlFor="add-shadow" className="ml-2 block text-sm text-white/80">
+                  Add shadow effect
+                </label>
+              </div>
             </div>
 
             {/* Center text button for mobile */}
