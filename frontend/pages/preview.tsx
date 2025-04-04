@@ -127,15 +127,38 @@ const PreviewPage: NextPage = () => {
   };
   
   // Download the final image
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!finalImage) return;
     
-    const link = document.createElement('a');
-    link.href = finalImage;
-    link.download = 'procaptions-image.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Fetch the image as a blob
+      const response = await fetch(finalImage);
+      if (!response.ok) throw new Error('Failed to fetch image');
+      
+      const blob = await response.blob();
+      
+      // Create a blob URL
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'procaptions-image.png';
+      link.style.display = 'none';
+      
+      // Add to document, click and remove
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 100);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('Failed to download image. Please try again.');
+    }
   };
   
   // Edit the current image
