@@ -11,6 +11,8 @@ interface TextLayersEditorProps {
   backgroundImage: string | null;
   onLayersChange: (layers: TextLayer[]) => void;
   disabled: boolean;
+  isMobileView?: boolean;
+  onDrawerStateChange?: (isOpen: boolean) => void;
 }
 
 // Define drag state interface
@@ -75,13 +77,24 @@ const getFullImageUrl = (url: string | null): string | null => {
 const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
   backgroundImage,
   onLayersChange,
-  disabled
+  disabled,
+  isMobileView,
+  onDrawerStateChange
 }) => {
   // State for layers
   const [layers, setLayers] = useState<TextLayer[]>([]);
   
   // State for currently selected layer index
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(-1);
+  
+  // Enhanced mobile UI state
+  const [isMobile, setIsMobile] = useState(false)
+  
+  // Edit step approach for better mobile UX
+  const [editStep, setEditStep] = useState<'none' | 'layers' | 'style' | 'add'>('none')
+  
+  // Simplified drawer - just open/closed
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   
   // Reference for the image container
   const imageContainerRef = useRef<HTMLDivElement>(null);
@@ -106,14 +119,11 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     height: typeof window !== 'undefined' ? window.innerHeight : 0,
   });
   
-  // Add state for active tab (improves UI organization)
+  // Keep this for desktop view
   const [activeTab, setActiveTab] = useState<'layers' | 'style' | 'advanced'>('layers');
   
   // Add state for preview dimensions
   const [previewDimensions, setPreviewDimensions] = useState<{ width: number, height: number } | null>(null);
-  
-  // Add state for mobile drawer (for small screens)
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
   // Effect to notify parent of layer changes
   useEffect(() => {
@@ -126,25 +136,40 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     console.log('TextLayersEditor - Full background image URL:', getFullImageUrl(backgroundImage));
   }, [backgroundImage]);
   
-  // Handle window resize to keep position calculations accurate
+  // Use effect to determine if we're on mobile
   useEffect(() => {
     const handleResize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
       setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width,
+        height,
       });
       
-      // Force recalculation of preview dimensions and positions when window resizes
+      // Use the prop value if provided, otherwise detect based on screen size
+      if (isMobileView !== undefined) {
+        setIsMobile(isMobileView);
+      } else {
+        // Detect mobile screens
+        setIsMobile(width < 768);
+      }
+      
+      // Close drawer on window resize to avoid UI issues
+      if (isDrawerOpen && window.innerWidth > 768) {
+        setIsDrawerOpen(false);
+        setEditStep('none');
+      }
+      
+      // Force recalculation of preview dimensions when window resizes
       if (imageRef.current && originalImageDimensions) {
         // Force a re-render to update text positions
         setLayers(prevLayers => [...prevLayers]);
       }
-      
-      // Close drawer on window resize (to avoid UI issues)
-      if (isDrawerOpen && window.innerWidth > 768) {
-        setIsDrawerOpen(false);
-      }
     };
+    
+    // Initial call on mount
+    handleResize();
 
     window.addEventListener('resize', handleResize);
     
@@ -152,7 +177,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [originalImageDimensions, isDrawerOpen]);
+  }, [originalImageDimensions, isDrawerOpen, isMobileView]);
   
   // Load the background image to get its dimensions
   useEffect(() => {
@@ -434,62 +459,34 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
   
   // Update a layer's effect type
   const handleUpdateEffectType = (index: number, effectType: EffectType) => {
-    const newLayers = [...layers];
-    const layer = newLayers[index];
+    if (disabled) return;
     
-    if (!layer.style) {
-      layer.style = {};
+    const updatedLayers = [...layers];
+    if (!updatedLayers[index].style) {
+      updatedLayers[index].style = { ...DEFAULT_LAYER_STYLE };
     }
     
+    if (!updatedLayers[index].style.effects) {
+      updatedLayers[index].style.effects = { type: 'none' };
+    }
+    
+    // Simplified shadow effect - just toggle on/off with default settings
     if (effectType === 'none') {
-      // Remove effects
-      delete layer.style.effects;
+      updatedLayers[index].style.effects = { type: 'none' };
     } else {
-      // Set default settings based on effect type
-      let settings: EffectSettings | undefined;
-      
-      switch (effectType) {
-        case 'shadow':
-          settings = {
+      updatedLayers[index].style.effects = { 
+        type: effectType,
+        // Apply default effect settings with correct property names from ShadowEffectSettings interface
+        settings: {
             offset: [5, 5],
             color: '#000000',
             opacity: 0.5,
             blur: 3
-          } as ShadowEffectSettings;
-          break;
-        case 'outline':
-          settings = {
-            width: 2,
-            color: '#000000',
-            opacity: 1.0
-          } as OutlineEffectSettings;
-          break;
-        case 'glow':
-          settings = {
-            color: '#FFFFFF',
-            radius: 10,
-            opacity: 0.7
-          } as GlowEffectSettings;
-          break;
-        case '3d_depth':
-          settings = {
-            layers: 10,
-            angle: 45,
-            distance: 2,
-            color_gradient: ['#333333', '#666666', '#999999']
-          } as ThreeDEffectSettings;
-          break;
-      }
-      
-      if (settings) {
-        layer.style.effects = {
-          type: effectType,
-          settings
-        };
-      }
+        }
+      };
     }
     
-    setLayers(newLayers);
+    setLayers(updatedLayers);
   };
   
   // Calculate font style for preview text display
@@ -617,30 +614,363 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
     document.body.classList.add('cursor-grabbing');
   };
 
-  // Add a position marker component for better visual feedback
+  // Simplified toggle drawer
+  const toggleDrawer = (open?: boolean) => {
+    const newState = open !== undefined ? open : !isDrawerOpen;
+    setIsDrawerOpen(newState);
+    // Notify parent component about drawer state change
+    if (onDrawerStateChange) {
+      onDrawerStateChange(newState);
+    }
+  }
+  
+  // Toggle edit step
+  const toggleEditStep = (step: 'none' | 'layers' | 'style' | 'add') => {
+    if (editStep === step) {
+      setEditStep('none')
+      toggleDrawer(false)
+    } else {
+      setEditStep(step)
+      toggleDrawer(true)
+    }
+  }
+  
+  // Add position marker component with enhanced mobile visibility
   const PositionMarker = ({ position }: { position: Position }) => {
     const previewPos = originalToPreviewCoordinates(position.x, position.y);
     
     return (
       <div
-        className="absolute w-4 h-4 pointer-events-none z-5"
+        className="absolute pointer-events-none z-5"
         style={{
           top: `${previewPos.y}px`,
           left: `${previewPos.x}px`,
           transform: "translate(-50%, -50%)",
         }}
       >
-        <div className="absolute w-2 h-2 rounded-full bg-indigo-400 border border-indigo-600 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-glow"></div>
+        {/* Enhanced marker with animation for better visibility */}
+        <div className={`absolute rounded-full ${isMobile ? 'w-6 h-6' : 'w-4 h-4'} bg-indigo-500/20 border border-indigo-500/40 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse`}></div>
+        <div className="absolute w-2 h-2 rounded-full bg-indigo-500 border border-indigo-700 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-glow"></div>
       </div>
     );
   };
   
-  // Toggle mobile drawer
-  const toggleDrawer = () => {
-    setIsDrawerOpen(prev => !prev);
+  // Render step-based content for mobile
+  const renderStepContent = () => {
+    switch (editStep) {
+      case 'layers':
+        return (
+          <div className="p-5">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-medium text-white">Text Layers</h3>
+              <button 
+                className="p-2 bg-white/10 rounded-full"
+                onClick={() => toggleEditStep('none')}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {layers.length === 0 ? (
+              <div className="text-center py-6 text-white/50">
+                <p>No text layers yet</p>
+                <p className="text-sm mt-2">Tap the + button to add your first text layer</p>
+                <button
+                  onClick={handleAddLayer}
+                  className="mt-4 px-5 py-3 bg-indigo-500 text-white rounded-md hover:bg-indigo-600"
+                >
+                  <Plus size={20} className="inline-block mr-2" /> Add Text Layer
+                </button>
+              </div>
+            ) : (
+              <ul className="space-y-3 max-h-[60vh] overflow-y-auto pb-5">
+                {layers.map((layer, index) => (
+                  <motion.li
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className={`flex items-center justify-between p-4 rounded-md ${
+                      selectedLayerIndex === index
+                        ? "bg-indigo-500/20 border border-indigo-500/30"
+                        : "bg-white/5 hover:bg-white/10 border border-white/10"
+                    }`}
+                    onClick={() => setSelectedLayerIndex(index)}
+                  >
+                    <div className="flex items-center flex-1 min-w-0">
+                      <Move className="mr-2 text-indigo-400 flex-shrink-0" size={22} />
+                      <div className="truncate text-white/90" style={{ maxWidth: "200px" }}>
+                        {layer.text || "Empty text"}
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleMoveUp(index)
+                        }}
+                        disabled={index === 0 || disabled}
+                        className="p-3 text-white/60 hover:text-white disabled:opacity-30 rounded-md touch-manipulation"
+                        aria-label="Move layer up"
+                      >
+                        <ArrowUp size={22} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleMoveDown(index)
+                        }}
+                        disabled={index === layers.length - 1 || disabled}
+                        className="p-3 text-white/60 hover:text-white disabled:opacity-30 rounded-md touch-manipulation"
+                        aria-label="Move layer down"
+                      >
+                        <ArrowDown size={22} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRemoveLayer(index)
+                        }}
+                        disabled={disabled}
+                        className="p-3 text-rose-400 hover:text-rose-300 disabled:opacity-30 rounded-md touch-manipulation"
+                        aria-label="Remove layer"
+                      >
+                        <X size={22} />
+                      </button>
+                    </div>
+                  </motion.li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+        
+      case 'style':
+        return selectedLayerIndex >= 0 && selectedLayerIndex < layers.length ? (
+          <div className="p-5">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-medium text-white">Edit Layer</h3>
+              <button 
+                className="p-2 bg-white/10 rounded-full"
+                onClick={() => toggleEditStep('none')}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="space-y-5 max-h-[60vh] overflow-y-auto pb-5">
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Text
+                </label>
+                <input
+                  type="text"
+                  value={layers[selectedLayerIndex].text}
+                  onChange={(e) => handleUpdateText(selectedLayerIndex, e.target.value)}
+                  className="w-full px-4 py-4 text-lg border bg-white/10 border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                  placeholder="Enter text"
+                  disabled={disabled}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Font
+                </label>
+                <select
+                  value={layers[selectedLayerIndex].style?.font_name || 'anton'}
+                  onChange={(e) => handleUpdateFontName(selectedLayerIndex, e.target.value)}
+                  className="w-full px-4 py-4 text-lg bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                  disabled={disabled}
+                >
+                  <option value="anton">Anton</option>
+                  <option value="sixcaps">Six Caps</option>
+                  <option value="impact">Impact</option>
+                  <option value="boldonse">Boldonse</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Font Size
+                </label>
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateFontSize(selectedLayerIndex, Math.max(20, (layers[selectedLayerIndex].style?.font_size || 120) - 10))}
+                    className="p-4 border border-white/20 rounded-l-md bg-white/5 hover:bg-white/10 text-white touch-manipulation"
+                    disabled={disabled}
+                    aria-label="Decrease font size"
+                  >
+                    <FiMinus size={24} />
+                  </button>
+                  <input
+                    type="number"
+                    value={layers[selectedLayerIndex].style?.font_size || 120}
+                    onChange={(e) => handleUpdateFontSize(selectedLayerIndex, parseInt(e.target.value) || 120)}
+                    className="w-24 text-center border-y border-white/20 py-4 text-lg bg-white/10 text-white focus:ring-indigo-500 focus:border-indigo-500"
+                    disabled={disabled}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateFontSize(selectedLayerIndex, (layers[selectedLayerIndex].style?.font_size || 120) + 10)}
+                    className="p-4 border border-white/20 rounded-r-md bg-white/5 hover:bg-white/10 text-white touch-manipulation"
+                    disabled={disabled}
+                    aria-label="Increase font size"
+                  >
+                    <FiPlus size={24} />
+                  </button>
+                  <span className="ml-2 text-gray-500 text-sm">px</span>
+                </div>
+                
+                {/* Font size presets */}
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[80, 100, 120, 150, 200, 300].map(size => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => handleUpdateFontSize(selectedLayerIndex, size)}
+                      className={`py-3 px-3 rounded-md text-sm ${
+                        layers[selectedLayerIndex].style?.font_size === size ? "bg-indigo-500/30 text-white border border-indigo-500/50"
+                          : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
+                      }`}
+                      disabled={disabled}
+                    >
+                      {size}px
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Text Color
+                </label>
+                <div className="flex items-center">
+                  <div 
+                    className="w-12 h-12 rounded border border-gray-300 mr-3"
+                    style={{ backgroundColor: layers[selectedLayerIndex].style?.color || '#FFFFFF' }}
+                  ></div>
+                  <input
+                    type="color"
+                    value={layers[selectedLayerIndex].style?.color || '#FFFFFF'}
+                    onChange={(e) => handleUpdateColor(selectedLayerIndex, e.target.value)}
+                    className="h-12 w-12 rounded touch-manipulation"
+                    disabled={disabled}
+                  />
+                </div>
+              </div>
+
+              {/* Effect type selector with simplified UI */}
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Effects
+                </label>
+                <div className="flex items-center">
+                  <div className="relative flex items-center">
+                    <input
+                      id={`shadow-effect-${selectedLayerIndex}`}
+                      type="checkbox"
+                      checked={layers[selectedLayerIndex]?.style?.effects?.type === 'shadow'}
+                      onChange={(e) => {
+                        handleUpdateEffectType(
+                          selectedLayerIndex, 
+                          e.target.checked ? 'shadow' : 'none'
+                        )
+                      }}
+                      className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
+                      disabled={disabled}
+                    />
+                    <label htmlFor={`shadow-effect-${selectedLayerIndex}`} className="ml-2 block text-sm text-white/80">
+                      Add shadow effect
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Center button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleCenterText}
+                  disabled={disabled || selectedLayerIndex < 0}
+                  className="flex items-center justify-center w-full py-4 text-base px-4 bg-white/10 hover:bg-white/15 text-white rounded-md border border-white/20 touch-manipulation"
+                  title="Center text in image"
+                >
+                  <MdCenterFocusStrong size={24} className="mr-2" />
+                  Center in Image
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-5 text-center py-8 text-white/50">
+            <p>Select a layer first to edit its style</p>
+            <p className="text-sm mt-2">Tap on a layer from the layers panel</p>
+          </div>
+        );
+      
+      case 'add':
+        return (
+          <div className="p-5">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-lg font-medium text-white">Add New Text</h3>
+              <button 
+                className="p-2 bg-white/10 rounded-full"
+                onClick={() => toggleEditStep('none')}
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="space-y-5">
+              <p className="text-white/70">
+                Add a new text layer to your image. You'll be able to customize its style after adding.
+              </p>
+              
+              <div>
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Text Content
+                </label>
+                <input
+                  type="text"
+                  id="new-text-content"
+                  placeholder="Enter text here"
+                  className="w-full px-4 py-4 text-lg border bg-white/10 border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                />
+              </div>
+              
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => {
+                    const inputElement = document.getElementById('new-text-content') as HTMLInputElement;
+                    const text = inputElement?.value || 'New Text';
+                    
+                    const newLayer: TextLayer = {
+                      text: text,
+                      position: originalImageDimensions ? 
+                        { x: Math.round(originalImageDimensions.width / 2), y: Math.round(originalImageDimensions.height / 2) } : 
+                        { x: 100, y: 100 },
+                      style: { ...DEFAULT_LAYER_STYLE }
+                    };
+                    
+                    const newLayers = [...layers, newLayer];
+                    setLayers(newLayers);
+                    setSelectedLayerIndex(newLayers.length - 1);
+                    toggleEditStep('style');
+                  }}
+                  className="px-6 py-4 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 active:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                >
+                  Add Layer
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
   };
   
-  // Render different tab content based on active tab
+  // Use early returns to handle edge cases
   const renderTabContent = () => {
     switch (activeTab) {
       case "layers":
@@ -652,11 +982,11 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 type="button"
                 onClick={handleAddLayer}
                 disabled={disabled}
-                className="p-3 bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-full hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 touch-manipulation"
+                className={`${isMobile ? 'p-3.5' : 'p-3'} bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-full hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 touch-manipulation`}
                 title="Add new text layer"
                 aria-label="Add new text layer"
               >
-                <Plus size={20} />
+                <Plus size={isMobile ? 24 : 20} />
               </button>
             </div>
 
@@ -673,7 +1003,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className={`flex items-center justify-between p-4 rounded-md cursor-pointer ${
+                    className={`flex items-center justify-between ${isMobile ? 'p-4' : 'p-3'} rounded-md cursor-pointer ${
                       selectedLayerIndex === index
                         ? "bg-indigo-500/20 border border-indigo-500/30"
                         : "bg-white/5 hover:bg-white/10 border border-white/10"
@@ -681,8 +1011,8 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                     onClick={() => setSelectedLayerIndex(index)}
                   >
                     <div className="flex items-center flex-1 min-w-0">
-                      <Move className="mr-2 text-indigo-400 flex-shrink-0" size={18} />
-                      <div className="truncate text-white/90" style={{ maxWidth: "150px" }}>
+                      <Move className="mr-2 text-indigo-400 flex-shrink-0" size={isMobile ? 22 : 18} />
+                      <div className="truncate text-white/90" style={{ maxWidth: isMobile ? "200px" : "150px" }}>
                         {layer.text || "Empty text"}
                       </div>
                     </div>
@@ -694,11 +1024,11 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                           handleMoveUp(index)
                         }}
                         disabled={index === 0 || disabled}
-                        className="p-2 text-white/60 hover:text-white disabled:opacity-30 rounded-md touch-manipulation"
+                        className={`${isMobile ? 'p-3' : 'p-2'} text-white/60 hover:text-white disabled:opacity-30 rounded-md touch-manipulation`}
                         title="Move up"
                         aria-label="Move layer up"
                       >
-                        <ArrowUp size={18} />
+                        <ArrowUp size={isMobile ? 22 : 18} />
                       </button>
                       <button
                         type="button"
@@ -707,11 +1037,11 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                           handleMoveDown(index)
                         }}
                         disabled={index === layers.length - 1 || disabled}
-                        className="p-2 text-white/60 hover:text-white disabled:opacity-30 rounded-md touch-manipulation"
+                        className={`${isMobile ? 'p-3' : 'p-2'} text-white/60 hover:text-white disabled:opacity-30 rounded-md touch-manipulation`}
                         title="Move down"
                         aria-label="Move layer down"
                       >
-                        <ArrowDown size={18} />
+                        <ArrowDown size={isMobile ? 22 : 18} />
                       </button>
                       <button
                         type="button"
@@ -720,11 +1050,11 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                           handleRemoveLayer(index)
                         }}
                         disabled={disabled}
-                        className="p-2 text-rose-400 hover:text-rose-300 disabled:opacity-30 rounded-md touch-manipulation"
+                        className={`${isMobile ? 'p-3' : 'p-2'} text-rose-400 hover:text-rose-300 disabled:opacity-30 rounded-md touch-manipulation`}
                         title="Remove layer"
                         aria-label="Remove layer"
                       >
-                        <X size={18} />
+                        <X size={isMobile ? 22 : 18} />
                       </button>
                     </div>
                   </motion.li>
@@ -745,7 +1075,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 type="text"
                 value={layers[selectedLayerIndex].text}
                 onChange={(e) => handleUpdateText(selectedLayerIndex, e.target.value)}
-                className="w-full px-4 py-3 border bg-white/10 border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                className={`w-full ${isMobile ? 'px-4 py-4 text-lg' : 'px-4 py-3'} border bg-white/10 border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none`}
                 placeholder="Enter text"
                 disabled={disabled}
               />
@@ -757,7 +1087,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               <select
                 value={layers[selectedLayerIndex].style?.font_name || 'anton'}
                 onChange={(e) => handleUpdateFontName(selectedLayerIndex, e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                className={`w-full ${isMobile ? 'px-4 py-4 text-lg' : 'px-4 py-3'} bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none`}
                 disabled={disabled}
               >
                 <option value="anton">Anton</option>
@@ -774,27 +1104,27 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => handleUpdateFontSize(selectedLayerIndex, Math.max(20, (layers[selectedLayerIndex].style?.font_size || 120) - 10))}
-                  className="p-3 border border-white/20 rounded-l-md bg-white/5 hover:bg-white/10 text-white touch-manipulation"
+                  className={`${isMobile ? 'p-4' : 'p-3'} border border-white/20 rounded-l-md bg-white/5 hover:bg-white/10 text-white touch-manipulation`}
                   disabled={disabled}
                   aria-label="Decrease font size"
                 >
-                  <FiMinus size={20} />
+                  <FiMinus size={isMobile ? 24 : 20} />
                 </button>
                 <input
                   type="number"
                   value={layers[selectedLayerIndex].style?.font_size || 120}
                   onChange={(e) => handleUpdateFontSize(selectedLayerIndex, parseInt(e.target.value) || 120)}
-                  className="w-24 text-center border-y border-white/20 py-3 bg-white/10 text-white focus:ring-indigo-500 focus:border-indigo-500"
+                  className={`w-24 text-center border-y border-white/20 ${isMobile ? 'py-4 text-lg' : 'py-3'} bg-white/10 text-white focus:ring-indigo-500 focus:border-indigo-500`}
                   disabled={disabled}
                 />
                 <button
                   type="button"
                   onClick={() => handleUpdateFontSize(selectedLayerIndex, (layers[selectedLayerIndex].style?.font_size || 120) + 10)}
-                  className="p-3 border border-white/20 rounded-r-md bg-white/5 hover:bg-white/10 text-white touch-manipulation"
+                  className={`${isMobile ? 'p-4' : 'p-3'} border border-white/20 rounded-r-md bg-white/5 hover:bg-white/10 text-white touch-manipulation`}
                   disabled={disabled}
                   aria-label="Increase font size"
                 >
-                  <FiPlus size={20} />
+                  <FiPlus size={isMobile ? 24 : 20} />
                 </button>
                 <span className="ml-2 text-gray-500 text-sm">px</span>
               </div>
@@ -806,7 +1136,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                     key={size}
                     type="button"
                     onClick={() => handleUpdateFontSize(selectedLayerIndex, size)}
-                    className={`py-2 px-3 rounded-md text-sm ${
+                    className={`${isMobile ? 'py-3' : 'py-2'} px-3 rounded-md text-sm ${
                       layers[selectedLayerIndex].style?.font_size === size ? "bg-indigo-500/30 text-white border border-indigo-500/50"
                         : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10"
                     } touch-manipulation`}
@@ -823,14 +1153,14 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               </label>
               <div className="flex items-center">
                 <div 
-                  className="w-10 h-10 rounded border border-gray-300 mr-3"
+                  className={`${isMobile ? 'w-12 h-12' : 'w-10 h-10'} rounded border border-gray-300 mr-3`}
                   style={{ backgroundColor: layers[selectedLayerIndex].style?.color || '#FFFFFF' }}
                 ></div>
                 <input
                   type="color"
                   value={layers[selectedLayerIndex].style?.color || '#FFFFFF'}
                   onChange={(e) => handleUpdateColor(selectedLayerIndex, e.target.value)}
-                  className="h-10 w-10 rounded touch-manipulation"
+                  className={`${isMobile ? 'h-12 w-12' : 'h-10 w-10'} rounded touch-manipulation`}
                   disabled={disabled}
                 />
               </div>
@@ -844,7 +1174,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
               <select
                 value={layers[selectedLayerIndex].style?.effects?.type || 'none'}
                 onChange={(e) => handleUpdateEffectType(selectedLayerIndex, e.target.value as EffectType)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none"
+                className={`w-full ${isMobile ? 'px-4 py-4 text-lg' : 'px-4 py-3'} bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none`}
                 disabled={disabled}
               >
                 {EFFECT_TYPES.map(effect => (
@@ -885,10 +1215,10 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                   
                   setLayers(newLayers);
                 }}
-                className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
+                className={`${isMobile ? 'h-6 w-6' : 'h-5 w-5'} text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10`}
                 disabled={disabled}
               />
-              <label htmlFor="shadow-effect" className="ml-2 block text-sm text-white/80">
+              <label htmlFor="shadow-effect" className={`ml-2 block ${isMobile ? 'text-base' : 'text-sm'} text-white/80`}>
                 Add shadow effect
               </label>
             </div>
@@ -899,10 +1229,10 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 type="button"
                 onClick={handleCenterText}
                 disabled={disabled || selectedLayerIndex < 0}
-                className="flex items-center justify-center w-full py-3 px-4 bg-indigo-500/20 hover:bg-indigo-500/30 text-white rounded-md border border-indigo-500/40 touch-manipulation"
+                className={`flex items-center justify-center w-full ${isMobile ? 'py-4 text-base' : 'py-3 text-sm'} px-4 bg-indigo-500/20 hover:bg-indigo-500/30 text-white rounded-md border border-indigo-500/40 touch-manipulation`}
                 title="Center text in image"
               >
-                <MdCenterFocusStrong size={20} className="mr-2" />
+                <MdCenterFocusStrong size={isMobile ? 24 : 20} className="mr-2" />
                 Center in Image
               </button>
             </div>
@@ -929,19 +1259,6 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
           transition={{ duration: 0.5 }}
           className="bg-[#050510] rounded-lg shadow-lg p-4 border border-white/10"
         >
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-medium text-white/90">Text Preview</h3>
-            
-            {/* Mobile-only toggle button for editor panel */}
-            <button 
-              className="md:hidden p-2 bg-indigo-500/20 border border-indigo-500/40 rounded-md text-white/90 touch-manipulation"
-              onClick={toggleDrawer}
-              aria-label="Toggle editor panel"
-            >
-              {isDrawerOpen ? <X size={20} /> : <Layers size={20} />}
-            </button>
-          </div>
-          
           {/* Interactive preview area with fixed aspect ratio */}
           <div 
             className="relative bg-[#030303] rounded-lg overflow-hidden mb-4 border border-white/5"
@@ -980,7 +1297,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                   <div 
                     key={index}
                     style={getTextStyle(layer, index)}
-                    className={`preview-text-layer ${selectedLayerIndex === index ? 'ring-2 ring-indigo-400' : ''}`}
+                    className={`preview-text-layer ${selectedLayerIndex === index ? 'ring-2 ring-indigo-400' : ''} ${isMobile ? 'active:scale-95' : ''} transition-transform`}
                     onClick={(e) => handleTextLayerClick(index, e)}
                     onMouseDown={(e) => handleTextLayerMouseDown(index, e)}
                     onTouchStart={(e) => handleTextLayerTouchStart(index, e)}
@@ -990,17 +1307,12 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 ))}
                 
                 {/* Mobile-only layer indicator */}
-                {layers.length > 0 && windowSize.width < 768 && (
-                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs p-2 rounded-md backdrop-blur-sm border border-white/10">
+                {layers.length > 0 && isMobile && selectedLayerIndex >= 0 && (
+                  <div className="absolute bottom-2 left-2 bg-black/80 text-white text-xs p-2 rounded-md backdrop-blur-sm border border-white/10 shadow-lg">
+                    <div className="flex items-center">
+                      <Layers size={12} className="mr-1.5" /> 
                     Layer {selectedLayerIndex + 1} of {layers.length}
                   </div>
-                )}
-                
-                {/* Debug info - only show on larger screens */}
-                {originalImageDimensions && windowSize.width >= 768 && (
-                  <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs p-1 rounded-md backdrop-blur-sm border border-white/10">
-                    Image: {originalImageDimensions.width}x{originalImageDimensions.height} | 
-                    Preview: {previewDimensions?.width}x{previewDimensions?.height}
                   </div>
                 )}
               </div>
@@ -1011,116 +1323,169 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
             )}
           </div>
           
-          <div className="text-sm text-white/50 text-center">
-            {layers.length ? 
-              `${layers.length} text layer${layers.length > 1 ? 's' : ''} - Tap to select or drag to reposition` : 
-              'No text layers added yet'}
+          {/* Replace with simplified layer count indicator */}
+          {layers.length > 0 && !isMobile && (
+            <div className="flex justify-end">
+              <div className="text-sm text-white/50 bg-black/30 px-3 py-1.5 rounded-full">
+                {layers.length} layer{layers.length > 1 ? 's' : ''}
           </div>
+            </div>
+          )}
         </motion.div>
         
-        {/* Mobile add layer button - fixed at bottom for easy access */}
-        {windowSize.width < 768 && !isDrawerOpen && (
+        {/* Canva-style mobile toolbar */}
+        {isMobile && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-4 right-4 z-30"
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-lg py-3 px-2 z-20"
           >
+            <div className="flex justify-around items-center">
             <button
-              type="button"
-              onClick={handleAddLayer}
-              disabled={disabled}
-              className="p-4 bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-full shadow-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 touch-manipulation"
-              title="Add new text layer"
-              aria-label="Add new text layer"
-            >
-              <Plus size={24} />
+                className={`flex flex-col items-center w-16 ${editStep === 'layers' ? 'text-indigo-600' : 'text-gray-800'}`}
+                onClick={() => toggleEditStep('layers')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-1">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+                <span className="text-xs">Layers</span>
             </button>
+              
+              {selectedLayerIndex >= 0 && (
+                <button 
+                  className={`flex flex-col items-center w-16 ${editStep === 'style' ? 'text-indigo-600' : 'text-gray-800'}`}
+                  onClick={() => toggleEditStep('style')}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-1">
+                    <path d="M9 3h6v11h2v-4h2v4h1v3h-3v2h-8v-2H6v-3h1v-4h2v4h2V3zm5 0v8h-4V3h4z"/>
+                  </svg>
+                  <span className="text-xs">Edit</span>
+                </button>
+              )}
+              
+              <button 
+                className={`flex flex-col items-center w-16 ${editStep === 'add' ? 'text-indigo-600' : 'text-gray-800'}`}
+                onClick={() => toggleEditStep('add')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-1">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span className="text-xs">Add Text</span>
+              </button>
+              
+              {selectedLayerIndex >= 0 && (
+            <button 
+                  className="flex flex-col items-center w-16 text-gray-800"
+                  onClick={handleCenterText}
+            >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-1">
+                    <path d="M12 2v20M2 12h20"/>
+                  </svg>
+                  <span className="text-xs">Center</span>
+            </button>
+              )}
+              
+              {selectedLayerIndex >= 0 && (
+                <button 
+                  className="flex flex-col items-center w-16 text-gray-800"
+                  onClick={() => handleRemoveLayer(selectedLayerIndex)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mb-1">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                  <span className="text-xs">Remove</span>
+                </button>
+              )}
+          </div>
+            
+          </motion.div>
+        )}
+        
+        {/* Canva-style editing panel for mobile */}
+        {isMobile && isDrawerOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 300 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 300 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed inset-0 bg-black/40 z-30"
+            onClick={() => toggleEditStep('none')}
+          >
+            <motion.div
+              initial={{ y: 300 }}
+              animate={{ y: 0 }}
+              exit={{ y: 300 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="absolute bottom-[80px] left-0 right-0 bg-[#050510] rounded-t-xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {renderStepContent()}
+            </motion.div>
           </motion.div>
         )}
       </div>
-      
-      {/* Right side - editor controls - responsive for mobile */}
-      <div 
-        className={`
-          md:w-2/5 bg-[#050510]/90 rounded-lg shadow-lg backdrop-blur-sm border border-white/10
-          ${windowSize.width < 768 ? 
-            `fixed inset-0 z-30 ${isDrawerOpen ? 'translate-y-0' : 'translate-y-full'} transition-transform duration-300 ease-in-out overflow-auto` 
-            : ''}
-        `}
-      >
-        {/* Close button only for mobile drawer */}
-        {windowSize.width < 768 && isDrawerOpen && (
-          <div className="sticky top-0 bg-[#050510] border-b border-white/10 p-3 flex justify-between items-center">
-            <h2 className="text-lg font-medium text-white/90">Text Editor</h2>
-            <button 
-              className="p-2 bg-white/10 rounded-md text-white/90"
-              onClick={toggleDrawer}
-              aria-label="Close panel"
-            >
-              <X size={20} />
-            </button>
-          </div>
-        )}
-        
-        {/* Tab navigation - Sticky on mobile */}
-        <div className={`flex border-b border-white/10 overflow-x-auto ${windowSize.width < 768 && isDrawerOpen ? 'sticky top-12 bg-[#050510] z-10' : ''}`}>
+
+      {/* Replace this section with more modern tab design at the top */}
+      {!isMobile && (
+        <div className="md:w-2/5 rounded-lg shadow-lg overflow-hidden">
+          {/* Modern header with sleek tabs */}
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-3">
+            <div className="flex bg-black/20 rounded-lg p-1.5">
           <button
             onClick={() => setActiveTab('layers')}
-            className={`flex items-center px-4 py-3 text-sm font-medium ${
+                className={`flex-1 py-2 px-4 rounded-md transition-all font-medium text-sm ${
               activeTab === 'layers' 
-                ? 'text-indigo-400 border-b-2 border-indigo-500' 
-                : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Layers className="mr-2" size={18} />
-            Layers
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-white/80 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex justify-center items-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                  <span>Layers</span>
+                </div>
           </button>
           <button
             onClick={() => setActiveTab('style')}
-            className={`flex items-center px-4 py-3 text-sm font-medium ${
+                className={`flex-1 py-2 px-4 rounded-md transition-all font-medium text-sm ${
               activeTab === 'style' 
-                ? 'text-indigo-400 border-b-2 border-indigo-500' 
-                : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
-            disabled={selectedLayerIndex < 0}
-          >
-            <FiType className="mr-2" size={18} />
-            Style
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-white/80 hover:bg-white/10'
+                }`}
+              >
+                <div className="flex justify-center items-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                  <span>Edit Layers</span>
+                </div>
           </button>
+            </div>
         </div>
         
-        {/* Tab content */}
-        <div className="p-4">
+          {/* Keep the existing tab content */}
+          <div className="bg-[#050510]/95 border border-white/10 min-h-[300px] p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           {renderTabContent()}
         </div>
         
-        {/* Quick actions - Add new layer button when no layers exist */}
+          {/* Quick actions */}
         {layers.length === 0 && (
-          <div className="p-4 border-t border-white/10">
+            <div className="p-4 border-t border-white/10 bg-[#050510]/95">
             <button
               type="button"
               onClick={handleAddLayer}
               disabled={disabled}
-              className="w-full px-4 py-3 bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 touch-manipulation"
+                className="w-full px-4 py-3 text-sm bg-gradient-to-r from-indigo-500 to-rose-500 text-white rounded-md hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 touch-manipulation"
             >
               <Plus className="inline mr-1" size={18} /> Add Text Layer
             </button>
           </div>
         )}
-        
-        {/* Mobile footer - done button at the bottom */}
-        {windowSize.width < 768 && isDrawerOpen && (
-          <div className="sticky bottom-0 bg-[#050510] border-t border-white/10 p-4">
-            <button
-              type="button"
-              onClick={toggleDrawer}
-              className="w-full px-4 py-3 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 touch-manipulation"
-            >
-              Done
-            </button>
           </div>
         )}
-      </div>
     </div>
   );
 }
