@@ -1338,7 +1338,7 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-lg py-3 px-2 z-20"
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-xl shadow-lg py-3 px-2 z-20"
           >
             <div className="flex justify-around items-center">
             <button

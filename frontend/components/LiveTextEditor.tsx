@@ -22,8 +22,6 @@ export interface LiveTextEditorProps {
   fontSize: number
   onFontSizeChange: (size: number) => void
   fontName: string
-  onFontNameChange: (font: string) => void
-  withPeriod: boolean
   onWithPeriodChange: (withPeriod: boolean) => void
   position: Position
   onPositionChange: (position: Position) => void
@@ -1035,19 +1033,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
             </div>
 
             <div className="flex items-center">
-              <div className="relative flex items-center">
-                <input
-                  id="with-period"
-                  type="checkbox"
-                  checked={withPeriod}
-                  onChange={(e) => onWithPeriodChange(e.target.checked)}
-                  className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-white/20 rounded bg-white/10"
-                  disabled={disabled}
-                />
-                <label htmlFor="with-period" className="ml-2 block text-sm text-white/70">
-                  Add period at the end
-                </label>
-              </div>
+              
             </div>
           </div>
         );
@@ -1284,7 +1270,7 @@ const LiveTextEditor: React.FC<LiveTextEditorProps> = ({
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-lg py-3 px-2 z-20"
+            className="fixed bottom-0 left-0 right-0  bg-white rounded-xl shadow-lg py-3 px-2 z-20"
           >
             <div className="flex justify-around items-center">
               <button 
