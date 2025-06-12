@@ -13,7 +13,25 @@ const nextConfig = {
         source: '/uploads/:path*',
         destination: 'http://localhost:8000/uploads/:path*',
       }
+      
     ];
+    
+  },
+  httpAgentOptions: {
+    keepAlive: true,
+  },
+  // Add proxy configuration for API requests
+  async serverRuntimeConfig() {
+    return {
+      httpProxy: {
+        '/api': {
+          target: 'http://localhost:8000',
+          pathRewrite: { '^/api': '/api/v1' },
+          changeOrigin: true,
+          timeout: 60000, // 60 seconds
+        },
+      },
+    };
   },
   // Add images configuration
   images: {

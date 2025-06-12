@@ -31,6 +31,9 @@ const EditPage: NextPage = () => {
   // UI state
   const [isScrolled, setIsScrolled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  // Add state to track if any drawer is open in child components
+  const [isAnyDrawerOpen, setIsAnyDrawerOpen] = useState(false);
 
   // Handle scrolling for header effects
   useEffect(() => {
@@ -39,6 +42,20 @@ const EditPage: NextPage = () => {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Detect mobile screen
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Check initially
+    checkMobile();
+    
+    // Add resize listener
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   useEffect(() => {
@@ -121,6 +138,11 @@ const EditPage: NextPage = () => {
     
     // Navigate to preview page
     router.push('/preview');
+  };
+
+  // Add function to handle drawer state change from child components
+  const handleDrawerStateChange = (isOpen: boolean) => {
+    setIsAnyDrawerOpen(isOpen);
   };
 
   return (
@@ -215,38 +237,86 @@ const EditPage: NextPage = () => {
             className="max-w-6xl mx-auto"
           >
             <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-medium text-white">Edit Your Text</h2>
-                
-                {/* Toggle between single and multi-layer text modes */}
-                <div className="flex space-x-2">
+              {/* Mobile toggle for text modes - Fixed at top of screen for easy access */}
+              {isMobile && (
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 mb-5 -mt-6 -mx-6 px-6 py-3 rounded-t-lg">
+                  <div className="text-center">
+                    <div className="inline-flex bg-black/20 p-1 rounded-lg">
                   <button
-                    onClick={toggleTextMode}
-                    className={`flex items-center px-3 py-1 rounded-md transition-colors ${
-                      !useMultiLayer ? 'bg-gradient-to-r from-indigo-500 to-rose-500 text-white' : 'bg-white/10 text-white/60 hover:text-white'
-                    }`}
-                  >
-                    <FiType className="mr-1" />
-                    Single Text
+                        onClick={() => setUseMultiLayer(false)}
+                        className={`flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium ${
+                          !useMultiLayer 
+                            ? 'bg-white text-gray-900 shadow-sm' 
+                            : 'text-white/80 hover:bg-white/10'
+                        }`}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                          <path d="M4 9h16M4 15h16M8 4v16M16 4v16"/>
+                        </svg>
+                        <span>Single Text</span>
                   </button>
                   <button
-                    onClick={toggleTextMode}
-                    className={`flex items-center px-3 py-1 rounded-md transition-colors ${
-                      useMultiLayer ? 'bg-gradient-to-r from-indigo-500 to-rose-500 text-white' : 'bg-white/10 text-white/60 hover:text-white'
+                        onClick={() => setUseMultiLayer(true)}
+                        className={`flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium ${
+                          useMultiLayer 
+                            ? 'bg-white text-gray-900 shadow-sm' 
+                            : 'text-white/80 hover:bg-white/10'
+                        }`}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                        <span>Multiple Layers</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Desktop toggle for text modes */}
+              {!isMobile && (
+                <div className="flex justify-between items-center mb-6 p-2 bg-[#050510] rounded-md">
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => setUseMultiLayer(false)}
+                      className={`flex items-center px-4 py-1.5 rounded-md transition-all ${
+                        !useMultiLayer 
+                          ? 'bg-[#1A1A2E] text-white' 
+                          : 'text-white/60 hover:bg-[#1A1A2E]/40'
+                      }`}
+                    >
+                      <span className="mr-2 text-sm font-medium">T</span>
+                      <span className="text-sm">Single Text</span>
+                    </button>
+                    <button
+                      onClick={() => setUseMultiLayer(true)}
+                      className={`flex items-center px-4 py-1.5 rounded-md transition-all ${
+                        useMultiLayer 
+                          ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' 
+                          : 'text-white/60 hover:bg-[#1A1A2E]/40'
                     }`}
                   >
-                    <FiLayers className="mr-1" />
-                    Multiple Layers
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                      </svg>
+                      <span className="text-sm">Multiple Layers</span>
                   </button>
                 </div>
               </div>
+              )}
               
-              {/* Text editor based on mode */}
+              {/* Text editor based on mode - Using mobile prop to control view */}
+              <div className={`${!isMobile ? 'bg-[#050510] rounded-lg p-4' : ''}`}>
               {useMultiLayer ? (
                 <TextLayersEditor
                   backgroundImage={segmentationData.background}
                   onLayersChange={setTextLayers}
                   disabled={false}
+                  isMobileView={isMobile}
+                  onDrawerStateChange={handleDrawerStateChange}
                 />
               ) : (
                 <LiveTextEditor
@@ -266,9 +336,13 @@ const EditPage: NextPage = () => {
                   disabled={false}
                   shadowEffect={shadowEffect}
                   onShadowEffectChange={setShadowEffect}
+                  isMobileView={isMobile}
+                  onDrawerStateChange={handleDrawerStateChange}
                 />
               )}
+              </div>
               
+              {/* Navigation buttons */}
               <div className="mt-8 pt-6 border-t border-white/10 flex justify-between">
                 <Link href="/upload">
                   <button className="text-white/60 hover:text-white flex items-center transition-colors">
@@ -283,9 +357,11 @@ const EditPage: NextPage = () => {
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleContinue}
-                  className="bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-5 py-2 rounded-md flex items-center"
+                  className={`${isMobile ? 
+                    `fixed bottom-[80px] right-4 shadow-lg ${isAnyDrawerOpen ? "z-10 opacity-0" : "z-50 opacity-100"}` : 
+                    ""} bg-gradient-to-r from-indigo-500 to-rose-500 hover:opacity-90 transition-opacity text-white px-5 py-2 rounded-md flex items-center`}
                 >
-                  Continue to Preview
+                  {isMobile ? "Create" : "Continue to Preview"}
                   <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                   </svg>
