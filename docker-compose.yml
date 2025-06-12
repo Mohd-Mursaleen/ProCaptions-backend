@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   backend:
     build: .
@@ -31,4 +29,4 @@ services:
     command: redis-server --appendonly yes
 
 volumes:
-  redis-data: 
+  redis-data:
