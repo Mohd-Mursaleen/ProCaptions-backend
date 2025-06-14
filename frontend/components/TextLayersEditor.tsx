@@ -39,14 +39,6 @@ const DEFAULT_LAYER_STYLE: TextLayerStyle = {
   }
 };
 
-const EFFECT_TYPES: Array<{ value: EffectType; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'shadow', label: 'Shadow' },
-  { value: 'outline', label: 'Outline' },
-  { value: 'glow', label: 'Glow' },
-  { value: '3d_depth', label: '3D Effect' }
-];
-
 // Helper function to ensure image URLs are properly formatted
 const getFullImageUrl = (url: string | null): string | null => {
   if (!url) return null;
@@ -1165,26 +1157,6 @@ const TextLayersEditor: React.FC<TextLayersEditorProps> = ({
                 />
               </div>
             </div>
-
-            {/* Add Effect Type Selector */}
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">
-                Text Effect
-              </label>
-              <select
-                value={layers[selectedLayerIndex].style?.effects?.type || 'none'}
-                onChange={(e) => handleUpdateEffectType(selectedLayerIndex, e.target.value as EffectType)}
-                className={`w-full ${isMobile ? 'px-4 py-4 text-lg' : 'px-4 py-3'} bg-white/10 border border-white/20 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none`}
-                disabled={disabled}
-              >
-                {EFFECT_TYPES.map(effect => (
-                  <option key={effect.value} value={effect.value}>
-                    {effect.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Replace Shadow Effect Controls with a simple checkbox */}
             <div className="flex items-center my-4">
               <input
