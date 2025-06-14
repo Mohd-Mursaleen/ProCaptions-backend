@@ -77,74 +77,9 @@ from src.routes import image_routes
 # Include routers
 app.include_router(image_routes.router, prefix="/api/v1")
 
-# Download models on startup
-@app.on_event("startup")
-async def startup_event():
-    # Run model download in background to avoid blocking startup
-    asyncio.create_task(download_models())
-
-async def download_models():
-    try:
-        from src.setup.download_models import setup_models
-        await asyncio.to_thread(setup_models)
-        logger.info("Model setup completed")
-    except Exception as e:
-        logger.error(f"Error during model setup: {str(e)}")
 
 # Health check endpoint
-@app.get("/health")
-async def health_check():
-    # Get more detailed health information
-    health_info = {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "uptime": time.time() - app.state.start_time if hasattr(app.state, "start_time") else None,
-        "cache": {
-            "redis": "connected" if redis_client else "disabled",
-        },
-        "models": {
-            "sam": {
-                "available": False,
-                "device": "unknown"
-            },
-            "yolo": {
-                "available": False,
-                "version": "unknown"
-            },
-            "rembg": {
-                "available": False
-            }
-        }
-    }
-    
-    # Import segmentation service to check model status
-    try:
-        from src.routes.image_routes import segmentation_service
-        
-        # Check SAM availability
-        if hasattr(segmentation_service, "sam_predictor") and segmentation_service.sam_predictor is not None:
-            health_info["models"]["sam"]["available"] = True
-            # Get device info if possible
-            if hasattr(segmentation_service.sam_predictor.model, "device"):
-                health_info["models"]["sam"]["device"] = str(segmentation_service.sam_predictor.model.device)
-        
-        # Check YOLOv8 availability
-        if hasattr(segmentation_service, "yolo_model") and segmentation_service.yolo_model is not None:
-            health_info["models"]["yolo"]["available"] = True
-            # Get version info if possible
-            health_info["models"]["yolo"]["version"] = getattr(segmentation_service.yolo_model, "version", "unknown")
-        
-        # Check rembg availability
-        try:
-            from rembg import remove
-            health_info["models"]["rembg"]["available"] = True
-        except ImportError:
-            health_info["models"]["rembg"]["available"] = False
-            
-    except Exception as e:
-        logger.error(f"Error checking model status: {str(e)}")
-    
-    return health_info
+
 
 # Record app start time for uptime tracking
 @app.on_event("startup")
