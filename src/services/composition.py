@@ -1,26 +1,23 @@
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-import numpy as np
-from typing import Dict, List, Tuple, Optional, Any, Union
+from PIL import Image, ImageDraw, ImageFont
+from typing import Dict, List, Tuple, Any
 import requests
 from io import BytesIO
-from src.services.s3_service import S3Service
 import os
 from pathlib import Path
-import cv2
 import logging
 import math
-import random
 import time
 import tempfile
 import aiofiles
 import aiohttp
-import urllib.parse
+import uuid
+import shutil
+
 
 logger = logging.getLogger(__name__)
 
 class CompositionService:
     def __init__(self):
-        self.s3 = S3Service()
         self.fonts_dir = Path("assets/fonts")
         self.fonts_dir.mkdir(parents=True, exist_ok=True)
         
@@ -540,7 +537,7 @@ class CompositionService:
             logging.info(f"Saved text image to: {text_path}")
             
             # Upload to cloud storage
-            cloud_url = await self.s3.upload_image(str(text_path))
+            cloud_url = _handle_local_fallback(text_path)
             
             # Store the original (non-adjusted) position in the return info
             # This ensures the frontend gets back the same position it sent
@@ -665,7 +662,7 @@ class CompositionService:
             result.save(result_path)
             
             # Upload to S3 and get public URL
-            result_info = await self.s3.upload_image(result_path)
+            result_info = _handle_local_fallback(result_path)
             
             return result_info['url']
         except Exception as e:
@@ -723,8 +720,8 @@ class CompositionService:
             background.save(result_path)
             logger.info(f"Saved multilayer image to: {result_path}")
             
-            # Upload to S3 and get public URL
-            result_info = await self.s3.upload_image(result_path)
+
+            result_info = _handle_local_fallback(result_path)
             logger.info(f"Uploaded multilayer image to S3: {result_info['url']}")
             
             return result_info['url']
@@ -743,4 +740,40 @@ class TextLayer:
             "text": self.text,
             "position": self.position,
             "style": self.style
+        }
+
+def _handle_local_fallback(image_path: Path, folder: str = "processed") -> Dict:
+    """Fallback to local storage when S3 upload fails"""
+    logger.info(f"Using local storage fallback for {image_path}")
+    try:
+        # Create a public directory
+        public_dir = Path("uploads/public")
+        public_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Generate a unique filename
+        unique_id = uuid.uuid4().hex[:8]
+        filename = Path(image_path).name
+        base_name, ext = os.path.splitext(filename)
+        # Replace spaces with underscores to avoid URL encoding issues
+        safe_base_name = base_name.replace(" ", "_")
+        new_filename = f"{safe_base_name}_{unique_id}{ext}"
+        
+        # Copy the file to the public directory
+        public_path = public_dir / new_filename
+        shutil.copy2(image_path, public_path)
+        
+        # Generate a local URL
+        local_url = f"/uploads/public/{new_filename}"
+        logger.info(f"Local fallback: Copied {image_path} to {public_path}, URL: {local_url}")
+        
+        return {
+            "url": local_url,
+            "public_id": new_filename
+        }
+    except Exception as e:
+        logger.error(f"Local fallback also failed: {str(e)}")
+        # Last resort - return the original path
+        return {
+            "url": f"/uploads/{os.path.basename(str(image_path))}",
+            "public_id": os.path.basename(str(image_path))
         }

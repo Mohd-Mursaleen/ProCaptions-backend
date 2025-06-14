@@ -51,18 +51,11 @@ export default function VideoSection() {
         >
           <div className="aspect-video bg-black/50 relative">
             {/* This would be replaced with an actual video in production */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-full h-full bg-gradient-to-br from-indigo-500/20 to-rose-500/20">
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-white text-center">
-                    <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center mx-auto mb-4 border border-white/20">
-                      <div className="w-0 h-0 border-t-8 border-t-transparent border-l-16 border-l-white border-b-8 border-b-transparent ml-1"></div>
-                    </div>
-                    <p className="text-white/60">Product Demo Video</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <iframe
+              className="w-full h-full"
+              src="https://www.youtube.com/embed/6iUkTiAAxG8?autoplay=1&controls=1&rel=0"
+              allowFullScreen
+            />
           </div>
         </motion.div>
       </motion.div>

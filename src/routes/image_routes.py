@@ -3,22 +3,17 @@ from pathlib import Path
 import shutil
 from src.services.segmentation import SegmentationService
 from src.services.composition import CompositionService, TextLayer
-from src.services.s3_service import S3Service
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 import aiofiles
 import os
-import numpy as np
-from PIL import Image
-import base64
-import io
 import logging
 import glob
+import uuid
 
 router = APIRouter()
 segmentation_service = SegmentationService()
 composition_service = CompositionService()
-s3_service = S3Service()
 logger = logging.getLogger(__name__)
 
 class DramaticTextRequest(BaseModel):
@@ -34,33 +29,6 @@ class DramaticTextRequest(BaseModel):
     class Config:
         # Allow extra fields to be flexible with client
         extra = "ignore"
-    
-    @validator('position')
-    def validate_position(cls, v):
-        if not isinstance(v, dict):
-            raise ValueError('position must be a dictionary')
-        # Ensure both x and y are present and converted to integers
-        x = int(v.get('x', 100))
-        y = int(v.get('y', 100))
-        return {'x': x, 'y': y}
-    
-    @validator('font_size')
-    def validate_font_size(cls, v):
-        if v is None:
-            return 150
-        try:
-            return int(v)
-        except (ValueError, TypeError):
-            return 150
-    
-    @validator('color')
-    def validate_color(cls, v):
-        if not v:
-            return "#FFFFFF"
-        # Simple validation for hex color
-        if not isinstance(v, str) or not (v.startswith('#') or v.startswith('rgb')):
-            return "#FFFFFF"
-        return v
 
 class ComposeRequest(BaseModel):
     background_with_text_path: str
@@ -92,9 +60,9 @@ async def segment_image(file: UploadFile) -> Dict[str, str]:
         logger.info(f"Segmentation successful: foreground={fore_path}, background={back_path}, mask={mask_path}")
 
         # Upload to S3
-        foreground_cloud = await s3_service.upload_image(fore_path)
-        background_cloud = await s3_service.upload_image(back_path)
-        mask_cloud = await s3_service.upload_image(mask_path)
+        foreground_cloud = _handle_local_fallback(fore_path)
+        background_cloud = _handle_local_fallback(back_path)
+        mask_cloud = _handle_local_fallback(mask_path)
         
         logger.info(f"Image URL details: foreground={foreground_cloud['url']}, background={background_cloud['url']}, mask={mask_cloud['url']}")
 
@@ -288,3 +256,39 @@ async def list_uploads() -> Dict[str, List[str]]:
     except Exception as e:
         logger.error(f"Error listing uploads: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error listing uploads: {str(e)}") 
+
+def _handle_local_fallback(image_path: Path, folder: str = "processed") -> Dict:
+    """Fallback to local storage when S3 upload fails"""
+    logger.info(f"Using local storage fallback for {image_path}")
+    try:
+        # Create a public directory
+        public_dir = Path("uploads/public")
+        public_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Generate a unique filename
+        unique_id = uuid.uuid4().hex[:8]
+        filename = Path(image_path).name
+        base_name, ext = os.path.splitext(filename)
+        # Replace spaces with underscores to avoid URL encoding issues
+        safe_base_name = base_name.replace(" ", "_")
+        new_filename = f"{safe_base_name}_{unique_id}{ext}"
+        
+        # Copy the file to the public directory
+        public_path = public_dir / new_filename
+        shutil.copy2(image_path, public_path)
+        
+        # Generate a local URL
+        local_url = f"/uploads/public/{new_filename}"
+        logger.info(f"Local fallback: Copied {image_path} to {public_path}, URL: {local_url}")
+        
+        return {
+            "url": local_url,
+            "public_id": new_filename
+        }
+    except Exception as e:
+        logger.error(f"Local fallback also failed: {str(e)}")
+        # Last resort - return the original path
+        return {
+            "url": f"/uploads/{os.path.basename(str(image_path))}",
+            "public_id": os.path.basename(str(image_path))
+        }

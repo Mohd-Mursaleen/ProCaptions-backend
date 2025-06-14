@@ -2,21 +2,13 @@ import numpy as np
 from PIL import Image
 from pathlib import Path
 import logging
-from typing import Tuple, Optional
-import os
-import time
-import redis
-import hashlib
-import json
-from src.services.s3_service import S3Service
-
+from typing import Tuple
 class SegmentationService:
     def __init__(self):
-        self.s3_service = S3Service()
+        pass
 
     async def segment_image(self, image_path: Path) -> Tuple[Path, Path, Path]:
         try:
-            start_time = time.time()
             logging.info(f"Starting segmentation for image: {image_path}")
             
             # Get image dimensions before processing
@@ -110,9 +102,6 @@ class SegmentationService:
                     processing_path.unlink()
                 except Exception as e:
                     logging.warning(f"Failed to remove temporary file: {e}")
-            
-            end_time = time.time()
-            logging.info(f"Segmentation completed in {end_time - start_time:.2f} seconds")
             
             return fore_path, back_path, mask_path
         
