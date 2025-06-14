@@ -50,27 +50,6 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/uploads/public", StaticFiles(directory="uploads/public"), name="public_uploads")
 
-# Initialize Redis cache if environment variable set
-try:
-    if os.getenv("USE_REDIS", "false").lower() == "true":
-        import redis
-        logger.info("Setting up Redis cache")
-        redis_client = redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
-            password=os.getenv("REDIS_PASSWORD", ""),
-            decode_responses=True
-        )
-        # Test connection
-        redis_client.ping()
-        logger.info("Redis cache connected successfully")
-    else:
-        redis_client = None
-        logger.info("Redis caching disabled")
-except Exception as e:
-    logger.warning(f"Failed to connect to Redis: {str(e)}")
-    redis_client = None
-
 # Import routers
 from src.routes import image_routes
 

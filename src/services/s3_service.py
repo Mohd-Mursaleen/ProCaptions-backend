@@ -23,7 +23,7 @@ has_s3 = (
 )
 
 # S3 configuration
-S3_BUCKET = os.getenv('S3_BUCKET', 'sandbox-opener-bucket')
+S3_BUCKET = os.getenv('S3_BUCKET', 'procaption-bucket')
 S3_REGION = os.getenv('S3_REGION', 'ap-south-1')
 S3_URL = os.getenv('S3_URL', 'https://sandbox-opener-bucket.s3.ap-south-1.amazonaws.com')
 

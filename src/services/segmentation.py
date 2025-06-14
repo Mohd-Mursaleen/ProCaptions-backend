@@ -8,91 +8,11 @@ import time
 import redis
 import hashlib
 import json
+from src.services.s3_service import S3Service
 
 class SegmentationService:
     def __init__(self):
-        # Initialize Redis client if available
-        self.redis_client = None
-        if os.getenv("USE_REDIS", "false").lower() == "true":
-            try:
-                self.redis_client = redis.Redis(
-                    host=os.getenv("REDIS_HOST", "localhost"),
-                    port=int(os.getenv("REDIS_PORT", 6379)),
-                    password=os.getenv("REDIS_PASSWORD", ""),
-                    db=0
-                )
-                # Test connection
-                self.redis_client.ping()
-                logging.info("Redis cache connected for segmentation")
-            except Exception as e:
-                logging.warning(f"Redis connection failed: {str(e)}")
-                self.redis_client = None
-    
-    def _get_cache_key(self, image_path: Path) -> str:
-        """Generate a cache key for an image based on its content hash"""
-        try:
-            with open(image_path, "rb") as f:
-                file_hash = hashlib.md5(f.read()).hexdigest()
-            return f"segmentation:{file_hash}"
-        except Exception as e:
-            logging.error(f"Error generating cache key: {str(e)}")
-            # Fallback to using the filename
-            return f"segmentation:{image_path.name}"
-    
-    def _cache_result(self, key: str, fore_path: Path, back_path: Path, mask_path: Path) -> bool:
-        """Cache segmentation results in Redis"""
-        if not self.redis_client:
-            return False
-        
-        try:
-            # Store paths in Redis (not the actual images to save memory)
-            cache_data = {
-                "fore_path": str(fore_path),
-                "back_path": str(back_path),
-                "mask_path": str(mask_path),
-                "timestamp": time.time()
-            }
-            
-            # Set with 1 hour expiration
-            self.redis_client.setex(
-                key,
-                3600,  # 1 hour expiration
-                json.dumps(cache_data)
-            )
-            
-            logging.info(f"Cached segmentation results for {key}")
-            return True
-        except Exception as e:
-            logging.error(f"Failed to cache results: {str(e)}")
-            return False
-    
-    def _get_cached_result(self, key: str) -> Optional[Tuple[Path, Path, Path]]:
-        """Retrieve cached segmentation results from Redis if available"""
-        if not self.redis_client:
-            return None
-        
-        try:
-            cached = self.redis_client.get(key)
-            if not cached:
-                return None
-            
-            cache_data = json.loads(cached)
-            
-            # Check if cached files still exist
-            fore_path = Path(cache_data["fore_path"])
-            back_path = Path(cache_data["back_path"])
-            mask_path = Path(cache_data["mask_path"])
-            
-            if fore_path.exists() and back_path.exists() and mask_path.exists():
-                logging.info(f"Using cached segmentation for {key}")
-                return fore_path, back_path, mask_path
-            else:
-                # Files don't exist anymore, invalidate cache
-                self.redis_client.delete(key)
-                return None
-        except Exception as e:
-            logging.error(f"Failed to retrieve from cache: {str(e)}")
-            return None
+        self.s3_service = S3Service()
 
     async def segment_image(self, image_path: Path) -> Tuple[Path, Path, Path]:
         try:
@@ -130,15 +50,7 @@ class SegmentationService:
                 processing_path = image_path
                 is_resized = False
             
-            # Check cache first if Redis is available
-            cache_key = self._get_cache_key(image_path)
-            cached_result = self._get_cached_result(cache_key)
-            if cached_result:
-                logging.info(f"Cache hit: {cache_key}")
-                return cached_result
-            
-            logging.info(f"Cache miss, processing image: {processing_path}")
-            
+
             # Read image for processing
             input_image = Image.open(processing_path).convert('RGBA')
             input_array = np.array(input_image)
@@ -198,9 +110,6 @@ class SegmentationService:
                     processing_path.unlink()
                 except Exception as e:
                     logging.warning(f"Failed to remove temporary file: {e}")
-            
-            # Cache the results if Redis is available
-            self._cache_result(cache_key, fore_path, back_path, mask_path)
             
             end_time = time.time()
             logging.info(f"Segmentation completed in {end_time - start_time:.2f} seconds")
