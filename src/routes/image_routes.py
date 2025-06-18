@@ -5,7 +5,6 @@ from src.services.segmentation import SegmentationService
 from src.services.composition import CompositionService, TextLayer
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
-import aiofiles
 import os
 import logging
 import glob
@@ -48,12 +47,16 @@ async def segment_image(file: UploadFile) -> Dict[str, str]:
         logger.info(f"Segmentation request received for file: {file.filename}")
         
         # Save temporary file
-        temp_path = Path("uploads/original") / file.filename
-        async with aiofiles.open(temp_path, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
+        temp_dir = Path("uploads/temp")
+        temp_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"File saved to temporary path: {temp_path}")
+        temp_path = temp_dir / f"{uuid.uuid4()}_{file.filename}"
+        
+        # Save uploaded file using standard file operations
+        with open(temp_path, 'wb') as out_file:
+            shutil.copyfileobj(file.file, out_file)
+            
+        logger.info(f"Temporary file saved: {temp_path}")
 
         # Process with segmentation service
         fore_path, back_path, mask_path = await segmentation_service.segment_image(temp_path)

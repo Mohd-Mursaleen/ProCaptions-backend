@@ -3,16 +3,58 @@ from PIL import Image
 from pathlib import Path
 import logging
 from typing import Tuple
+import os
+import pillow_heif
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+# Register HEIF opener with PIL
+pillow_heif.register_heif_opener()
+
 class SegmentationService:
     def __init__(self):
         pass
+
+    async def convert_to_png(self, image_path: Path) -> Path:
+        """
+        Convert any image format (including HEIC) to PNG format.
+        Returns the path to the converted PNG file.
+        """
+        try:
+            logging.info(f"Converting image format: {image_path}")
+            
+            # Create temp directory if it doesn't exist
+            temp_dir = Path("uploads/temp")
+            temp_dir.mkdir(exist_ok=True)
+            
+            # Generate output path
+            output_path = temp_dir / f"{image_path.stem}_converted.png"
+            
+            # Open and convert image
+            with Image.open(image_path) as img:
+                # Convert to RGB if needed
+                if img.mode not in ('RGB', 'RGBA'):
+                    img = img.convert('RGB')
+                
+                # Save as PNG
+                img.save(output_path, "PNG")
+            
+            logging.info(f"Image converted successfully to: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            logging.error(f"Image conversion failed: {str(e)}")
+            raise ValueError(f"Image conversion failed: {str(e)}")
 
     async def segment_image(self, image_path: Path) -> Tuple[Path, Path, Path]:
         try:
             logging.info(f"Starting segmentation for image: {image_path}")
             
+            # Convert image to PNG format first
+            png_image_path = await self.convert_to_png(image_path)
+            
             # Get image dimensions before processing
-            img = Image.open(image_path)
+            img = Image.open(png_image_path)
             original_width, original_height = img.size
             logging.info(f"Original image dimensions: {original_width}x{original_height}")
             
@@ -39,7 +81,7 @@ class SegmentationService:
                 processing_path = temp_path
                 is_resized = True
             else:
-                processing_path = image_path
+                processing_path = png_image_path
                 is_resized = False
             
 

@@ -8,8 +8,6 @@ import logging
 import math
 import time
 import tempfile
-import aiofiles
-import aiohttp
 import uuid
 import shutil
 
@@ -100,14 +98,7 @@ class CompositionService:
                 temp_file.close()
                 
                 # Download the file
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(image_path) as response:
-                        if response.status != 200:
-                            raise Exception(f"Failed to download image: HTTP {response.status}")
-                        
-                        content = await response.read()
-                        async with aiofiles.open(temp_path, 'wb') as f:
-                            await f.write(content)
+                self._download_image(image_path, temp_path)
                 
                 logger.info(f"Downloaded image to temporary file: {temp_path}")
                 return temp_path
@@ -728,6 +719,34 @@ class CompositionService:
         except Exception as e:
             logging.error(f"Error in add_multiple_text_layers: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to add multiple text layers: {str(e)}")
+        
+    def _download_image(self, image_path: str, temp_path: Path) -> Path:
+        """
+        Download image from URL to a temporary file.
+        Args:
+            image_path: URL of the image
+            temp_path: Path where the image should be saved
+        Returns:
+            Path to the downloaded image
+        """
+        try:
+            # Download the file
+            response = requests.get(image_path, stream=True)
+            if response.status_code != 200:
+                raise Exception(f"Failed to download image: HTTP {response.status_code}")
+            
+            # Write to temporary file
+            with open(temp_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            logger.info(f"Downloaded image to temporary file: {temp_path}")
+            return temp_path
+            
+        except Exception as e:
+            logger.error(f"Error downloading image: {str(e)}")
+            raise
 
 class TextLayer:
     def __init__(self, text: str, position: Dict[str, int], style: Dict):
@@ -777,3 +796,4 @@ def _handle_local_fallback(image_path: Path, folder: str = "processed") -> Dict:
             "url": f"/uploads/{os.path.basename(str(image_path))}",
             "public_id": os.path.basename(str(image_path))
         }
+    
