@@ -10,6 +10,7 @@ import logging
 import glob
 import uuid
 from src.security import get_api_key
+from src.utils.cleanup import cleanup_service
 
 router = APIRouter()
 segmentation_service = SegmentationService()
@@ -152,18 +153,23 @@ async def add_dramatic_text(request: DramaticTextRequest, api_key: str = Depends
 @router.post("/compose")
 async def compose_final(request: ComposeRequest, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
     try:
-        try:
-            result_path = await composition_service.compose_final_image(
-                request.background_with_text_path,
-                request.foreground_path
-            )
-            return {"final_image": result_path}
-        except FileNotFoundError as e:
-            logger.error(f"File not found error in compose_final: {str(e)}")
-            raise HTTPException(status_code=404, detail=f"Image file not found: {str(e)}")
-        except ValueError as e:
-            logger.error(f"Value error in compose_final: {str(e)}")
-            raise HTTPException(status_code=400, detail=str(e))
+        result_path = await composition_service.compose_final_image(
+            request.background_with_text_path,
+            request.foreground_path
+        )
+        
+        # Schedule cleanup for all temporary files
+        parent_dir = str(Path(request.background_with_text_path).parent)
+        for file_path in glob.glob(os.path.join(parent_dir, "*.*")):
+            await cleanup_service.schedule_cleanup(file_path)
+            
+        # Schedule cleanup for the final image
+        if result_path.startswith('/'):
+            result_path = result_path[1:]  # Remove leading slash
+        full_path = os.path.join(os.getcwd(), result_path)
+        await cleanup_service.schedule_cleanup(full_path)
+        
+        return {"final_image": result_path}
     except Exception as e:
         logger.error(f"Error in compose_final: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error composing final image: {str(e)}")
