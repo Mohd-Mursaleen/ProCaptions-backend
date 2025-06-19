@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, HTTPException
+from fastapi import APIRouter, UploadFile, HTTPException, Depends
 from pathlib import Path
 import shutil
 from src.services.segmentation import SegmentationService
@@ -9,6 +9,7 @@ import os
 import logging
 import glob
 import uuid
+from src.security import get_api_key
 
 router = APIRouter()
 segmentation_service = SegmentationService()
@@ -41,7 +42,7 @@ class MultiLayerTextRequest(BaseModel):
     text_layers: List[Dict[str, Any]]
 
 @router.post("/segment")
-async def segment_image(file: UploadFile) -> Dict[str, str]:
+async def segment_image(file: UploadFile, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
     try:
         # Log request information
         logger.info(f"Segmentation request received for file: {file.filename}")
@@ -90,7 +91,7 @@ async def segment_image(file: UploadFile) -> Dict[str, str]:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/add-dramatic-text", response_model=TextResponse)
-async def add_dramatic_text(request: DramaticTextRequest) -> Dict[str, str]:
+async def add_dramatic_text(request: DramaticTextRequest, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
     """
     Add dramatic impact-style text to an image (the text that appears behind subjects)
     """
@@ -149,7 +150,7 @@ async def add_dramatic_text(request: DramaticTextRequest) -> Dict[str, str]:
         raise HTTPException(status_code=500, detail=f"Error adding text: {str(e)}")
 
 @router.post("/compose")
-async def compose_final(request: ComposeRequest) -> Dict[str, str]:
+async def compose_final(request: ComposeRequest, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
     try:
         try:
             result_path = await composition_service.compose_final_image(
@@ -168,7 +169,7 @@ async def compose_final(request: ComposeRequest) -> Dict[str, str]:
         raise HTTPException(status_code=500, detail=f"Error composing final image: {str(e)}")
 
 @router.post("/add-multiple-text-layers")
-async def add_multiple_text_layers(request: MultiLayerTextRequest) -> Dict[str, str]:
+async def add_multiple_text_layers(request: MultiLayerTextRequest, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
     """Add multiple text layers to a background image"""
     try:
         # Log the incoming request
