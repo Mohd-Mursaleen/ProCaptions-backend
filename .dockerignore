@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.yaml
+
+# Documentation
+README.md
+*.md
+
+# Node.js (if applicable)
+node_modules
+npm-debug.log
+.npm
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.pytest_cache
+venv/
+.venv/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist
+build
+target
+
+# Test files
+test
+tests
+spec
+*.test.js
+*.spec.js
