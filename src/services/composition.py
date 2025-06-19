@@ -1,26 +1,21 @@
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
-import numpy as np
-from typing import Dict, List, Tuple, Optional, Any, Union
+from PIL import Image, ImageDraw, ImageFont
+from typing import Dict, List, Tuple, Any
 import requests
 from io import BytesIO
-from src.services.s3_service import S3Service
 import os
 from pathlib import Path
-import cv2
 import logging
 import math
-import random
 import time
 import tempfile
-import aiofiles
-import aiohttp
-import urllib.parse
+import uuid
+import shutil
+
 
 logger = logging.getLogger(__name__)
 
 class CompositionService:
     def __init__(self):
-        self.s3 = S3Service()
         self.fonts_dir = Path("assets/fonts")
         self.fonts_dir.mkdir(parents=True, exist_ok=True)
         
@@ -103,14 +98,7 @@ class CompositionService:
                 temp_file.close()
                 
                 # Download the file
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(image_path) as response:
-                        if response.status != 200:
-                            raise Exception(f"Failed to download image: HTTP {response.status}")
-                        
-                        content = await response.read()
-                        async with aiofiles.open(temp_path, 'wb') as f:
-                            await f.write(content)
+                self._download_image(image_path, temp_path)
                 
                 logger.info(f"Downloaded image to temporary file: {temp_path}")
                 return temp_path
@@ -454,61 +442,6 @@ class CompositionService:
             r, g, b, a = 255, 255, 255, 255
             
         return (r, g, b, a)
-    
-    def _suggest_text_positions(
-        self, 
-        background: Image.Image, 
-        text: str,
-        font: ImageFont.FreeTypeFont,
-        text_size: Tuple[int, int]
-    ) -> List[Dict[str, int]]:
-        """Suggest optimal text positions based on background content"""
-        width, height = background.size
-        
-        # Convert to numpy array for analysis
-        bg_array = np.array(background)
-        
-        # Check if alpha channel exists
-        has_alpha = bg_array.shape[2] == 4
-        
-        # Create grid of potential positions
-        grid_size = 3  # 3x3 grid
-        positions = []
-        
-        for y_idx in range(grid_size):
-            for x_idx in range(grid_size):
-                # Calculate position in grid
-                x_pos = int(width * (x_idx + 0.5) / grid_size - text_size[0] / 2)
-                y_pos = int(height * (y_idx + 0.5) / grid_size - text_size[1] / 2)
-                
-                # Keep within bounds
-                x_pos = max(10, min(width - text_size[0] - 10, x_pos))
-                y_pos = max(10, min(height - text_size[1] - 10, y_pos))
-                
-                # Check if this position is good (transparent or empty area)
-                region = bg_array[
-                    y_pos:min(y_pos + text_size[1], height), 
-                    x_pos:min(x_pos + text_size[0], width)
-                ]
-                
-                if has_alpha:
-                    # Calculate average alpha (transparency)
-                    avg_alpha = np.mean(region[:, :, 3]) if region.size > 0 else 0
-                    
-                    # If area is transparent (low alpha), it's a good candidate
-                    if avg_alpha < 128:  # Less than 50% opaque
-                        positions.append({"x": x_pos, "y": y_pos, "score": 255 - avg_alpha})
-                else:
-                    # For images without alpha, check brightness (darker areas might be better for light text)
-                    avg_brightness = np.mean(region) if region.size > 0 else 0
-                    positions.append({"x": x_pos, "y": y_pos, "score": 255 - avg_brightness})
-        
-        # Sort by score (higher is better)
-        positions.sort(key=lambda p: p["score"], reverse=True)
-        
-        # Return top 3 positions
-        return positions[:3]
-
     async def add_text(
         self,
         background_path: str,
@@ -595,7 +528,7 @@ class CompositionService:
             logging.info(f"Saved text image to: {text_path}")
             
             # Upload to cloud storage
-            cloud_url = await self.s3.upload_image(str(text_path))
+            cloud_url = _handle_local_fallback(text_path)
             
             # Store the original (non-adjusted) position in the return info
             # This ensures the frontend gets back the same position it sent
@@ -720,147 +653,12 @@ class CompositionService:
             result.save(result_path)
             
             # Upload to S3 and get public URL
-            result_info = await self.s3.upload_image(result_path)
+            result_info = _handle_local_fallback(result_path)
             
             return result_info['url']
         except Exception as e:
             logging.error(f"Error in compose_final_image: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to compose final image: {str(e)}")
-
-    async def generate_font_size_previews(
-        self,
-        background_path: str,
-        text: str,
-        position: Dict[str, int],
-        font_name: str = "anton"
-    ) -> Tuple[List[int], Dict[str, str]]:
-        """Generate previews of different font sizes for the user to choose from"""
-        # Define range of font sizes to preview
-        sizes = [80, 100, 120, 150, 180, 220]
-        previews = {}
-        
-        # Generate preview for each size
-        for size in sizes:
-            # Add text with the specified size
-            _, info = await self.add_text(
-                background_path,
-                text,
-                position,
-                font_size=size,
-                font_name=font_name
-            )
-            
-            # Store cloud URL
-            previews[str(size)] = info['cloud_url']
-        
-        return sizes, previews
-
-    async def suggest_text_positions(
-        self,
-        background_path: str,
-        text: str,
-        font_size: int = 120,
-        font_name: str = "anton"
-    ) -> List[Dict[str, int]]:
-        """Suggest optimal text positions based on background content"""
-        # Load the background image
-        if background_path.startswith('http'):
-            background = await self._get_image_from_url(background_path)
-        else:
-            background = Image.open(background_path).convert('RGBA')
-        
-        # Get the font and calculate text size
-        font = self._get_font(font_name, font_size)
-        
-        # Create a temp drawing context to measure text
-        temp_img = Image.new('RGBA', (1, 1))
-        draw = ImageDraw.Draw(temp_img)
-        text_bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        
-        # Get position suggestions
-        return self._suggest_text_positions(
-            background, 
-            text, 
-            font, 
-            (text_width, text_height)
-        )
-
-    def _get_social_media_dimensions(self, template_name: str) -> Tuple[int, int]:
-        """Get dimensions for a social media template"""
-        templates = {
-            "instagram_post": (1080, 1080),
-            "instagram_story": (1080, 1920),
-            "facebook_post": (1200, 630),
-            "twitter_post": (1600, 900),
-            "linkedin_post": (1200, 627),
-            "youtube_thumbnail": (1280, 720),
-            "tiktok_video": (1080, 1920)
-        }
-        
-        return templates.get(template_name, (1080, 1080))  # Default to square
-
-    async def create_template(
-        self,
-        foreground_path: str,
-        background_color: str = "#000000",
-        template_name: str = "instagram_post",
-        padding_percent: int = 10
-    ) -> str:
-        """Create a social media template with the foreground subject"""
-        # Load foreground image
-        if foreground_path.startswith('http'):
-            foreground = await self._get_image_from_url(foreground_path)
-        else:
-            foreground = Image.open(foreground_path).convert('RGBA')
-        
-        # Get template dimensions
-        width, height = self._get_social_media_dimensions(template_name)
-        
-        # Create background with specified color
-        background = Image.new('RGBA', (width, height), background_color)
-        
-        # Calculate scaling to fit foreground within template
-        # while maintaining aspect ratio and adding padding
-        fg_width, fg_height = foreground.size
-        fg_aspect = fg_width / fg_height
-        
-        # Calculate available space after padding
-        padding_px = min(width, height) * padding_percent // 100
-        avail_width = width - (2 * padding_px)
-        avail_height = height - (2 * padding_px)
-        
-        # Scale foreground to fit available space
-        if avail_width / avail_height > fg_aspect:
-            # Constrained by height
-            new_height = avail_height
-            new_width = int(new_height * fg_aspect)
-        else:
-            # Constrained by width
-            new_width = avail_width
-            new_height = int(new_width / fg_aspect)
-        
-        # Resize foreground
-        foreground_resized = foreground.resize((new_width, new_height), Image.LANCZOS)
-        
-        # Calculate position to center in template
-        pos_x = (width - new_width) // 2
-        pos_y = (height - new_height) // 2
-        
-        # Paste foreground onto background
-        background.paste(foreground_resized, (pos_x, pos_y), foreground_resized)
-        
-        # Save result
-        processed_dir = Path("uploads/processed")
-        template_path = processed_dir / f"template_{template_name}_{int(time.time())}.png"
-        background.save(template_path, "PNG")
-        
-        # Upload to cloud storage
-        cloud_url = await self.s3.upload_image(str(template_path))
-        
-        return cloud_url
-
     async def add_multiple_text_layers(self, background_path: str, text_layers: List['TextLayer']) -> str:
         """
         Add multiple text layers to a background image
@@ -913,14 +711,42 @@ class CompositionService:
             background.save(result_path)
             logger.info(f"Saved multilayer image to: {result_path}")
             
-            # Upload to S3 and get public URL
-            result_info = await self.s3.upload_image(result_path)
+
+            result_info = _handle_local_fallback(result_path)
             logger.info(f"Uploaded multilayer image to S3: {result_info['url']}")
             
             return result_info['url']
         except Exception as e:
             logging.error(f"Error in add_multiple_text_layers: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to add multiple text layers: {str(e)}")
+        
+    def _download_image(self, image_path: str, temp_path: Path) -> Path:
+        """
+        Download image from URL to a temporary file.
+        Args:
+            image_path: URL of the image
+            temp_path: Path where the image should be saved
+        Returns:
+            Path to the downloaded image
+        """
+        try:
+            # Download the file
+            response = requests.get(image_path, stream=True)
+            if response.status_code != 200:
+                raise Exception(f"Failed to download image: HTTP {response.status_code}")
+            
+            # Write to temporary file
+            with open(temp_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            
+            logger.info(f"Downloaded image to temporary file: {temp_path}")
+            return temp_path
+            
+        except Exception as e:
+            logger.error(f"Error downloading image: {str(e)}")
+            raise
 
 class TextLayer:
     def __init__(self, text: str, position: Dict[str, int], style: Dict):
@@ -934,3 +760,40 @@ class TextLayer:
             "position": self.position,
             "style": self.style
         }
+
+def _handle_local_fallback(image_path: Path, folder: str = "processed") -> Dict:
+    """Fallback to local storage when S3 upload fails"""
+    logger.info(f"Using local storage fallback for {image_path}")
+    try:
+        # Create a public directory
+        public_dir = Path("uploads/public")
+        public_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Generate a unique filename
+        unique_id = uuid.uuid4().hex[:8]
+        filename = Path(image_path).name
+        base_name, ext = os.path.splitext(filename)
+        # Replace spaces with underscores to avoid URL encoding issues
+        safe_base_name = base_name.replace(" ", "_")
+        new_filename = f"{safe_base_name}_{unique_id}{ext}"
+        
+        # Copy the file to the public directory
+        public_path = public_dir / new_filename
+        shutil.copy2(image_path, public_path)
+        
+        # Generate a local URL
+        local_url = f"/uploads/public/{new_filename}"
+        logger.info(f"Local fallback: Copied {image_path} to {public_path}, URL: {local_url}")
+        
+        return {
+            "url": local_url,
+            "public_id": new_filename
+        }
+    except Exception as e:
+        logger.error(f"Local fallback also failed: {str(e)}")
+        # Last resort - return the original path
+        return {
+            "url": f"/uploads/{os.path.basename(str(image_path))}",
+            "public_id": os.path.basename(str(image_path))
+        }
+    

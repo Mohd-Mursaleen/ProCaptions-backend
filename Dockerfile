@@ -23,9 +23,6 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p uploads/original uploads/processed uploads/temp src/models assets/fonts
 
-# Download models and fonts at build time
-RUN python -m src.setup.download_models
-
 # Expose the API port
 EXPOSE 8000
 
