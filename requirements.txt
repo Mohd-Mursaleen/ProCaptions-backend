@@ -9,3 +9,4 @@ cloudinary>=1.33.0
 python-dotenv>=0.19.0
 requests>=2.31.0
 python-jose[cryptography]>=3.3.0
+onnxruntime>=1.22.0
