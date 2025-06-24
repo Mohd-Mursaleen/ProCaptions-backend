@@ -40,14 +40,14 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             # Stop existing container
-            docker stop procaptions-backend || true
-            docker rm procaptions-backend || true
+            sudo docker stop procaptions-backend || true
+            sudo docker rm procaptions-backend || true
 
             # Pull latest image
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
 
             # Start new container
-            docker run -d \
+            sudo docker run -d \
               --name procaptions-backend \
               -p 8000:8000 \
               --restart unless-stopped \
