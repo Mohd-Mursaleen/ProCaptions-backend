@@ -6,14 +6,15 @@ from typing import Tuple
 import os
 import pillow_heif
 from PIL import ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True
+from rembg import remove, new_session
 
-# Register HEIF opener with PIL
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 pillow_heif.register_heif_opener()
 
 class SegmentationService:
     def __init__(self):
-        pass
+        # Initialize a persistent rembg session with the lighter u2netp model
+        self.session = new_session('u2netp')
 
     async def convert_to_png(self, image_path: Path) -> Path:
         """
@@ -23,20 +24,14 @@ class SegmentationService:
         try:
             logging.info(f"Converting image format: {image_path}")
             
-            # Create temp directory if it doesn't exist
             temp_dir = Path("uploads/temp")
             temp_dir.mkdir(exist_ok=True)
             
-            # Generate output path
             output_path = temp_dir / f"{image_path.stem}_converted.png"
             
-            # Open and convert image
             with Image.open(image_path) as img:
-                # Convert to RGB if needed
                 if img.mode not in ('RGB', 'RGBA'):
                     img = img.convert('RGB')
-                
-                # Save as PNG
                 img.save(output_path, "PNG")
             
             logging.info(f"Image converted successfully to: {output_path}")
@@ -50,18 +45,17 @@ class SegmentationService:
         try:
             logging.info(f"Starting segmentation for image: {image_path}")
             
-            # Convert image to PNG format first
+            # Convert image to PNG format
             png_image_path = await self.convert_to_png(image_path)
             
-            # Get image dimensions before processing
+            # Get original dimensions
             img = Image.open(png_image_path)
             original_width, original_height = img.size
             logging.info(f"Original image dimensions: {original_width}x{original_height}")
             
-            # Check if the image is very large and resize if needed to speed up processing
-            MAX_DIMENSION = 1024  # Maximum dimension for processing
+            # Resize large images for faster processing
+            MAX_DIMENSION = 1024
             if max(original_width, original_height) > MAX_DIMENSION:
-                # Calculate new dimensions while maintaining aspect ratio
                 if original_width > original_height:
                     new_width = MAX_DIMENSION
                     new_height = int(original_height * (MAX_DIMENSION / original_width))
@@ -69,11 +63,10 @@ class SegmentationService:
                     new_height = MAX_DIMENSION
                     new_width = int(original_width * (MAX_DIMENSION / original_height))
                 
-                # Resize the image for processing
-                logging.info(f"Resizing image to {new_width}x{new_height} for faster processing")
-                img = img.resize((new_width, new_height), Image.LANCZOS)
+                logging.info(f"Resizing image to {new_width}x{new_height}")
+                # Use BILINEAR for faster resizing
+                img = img.resize((new_width, new_height), Image.BILINEAR)
                 
-                # Save resized image to a temporary file for processing
                 temp_dir = Path("uploads/temp")
                 temp_dir.mkdir(exist_ok=True)
                 temp_path = temp_dir / f"resized_{image_path.name}"
@@ -84,40 +77,34 @@ class SegmentationService:
                 processing_path = png_image_path
                 is_resized = False
             
-
-            # Read image for processing
+            # Perform segmentation with the persistent session
             input_image = Image.open(processing_path).convert('RGBA')
             input_array = np.array(input_image)
-            
-            # Use rembg to remove background
-            from rembg import remove
-            output = remove(input_image)
+            output = remove(input_image, session=self.session)
             output_array = np.array(output)
             refined_alpha = output_array[:, :, 3]
             
-            # If image was resized, resize the mask back to original dimensions
+            # Resize mask back to original size if resized
             if is_resized:
-                logging.info(f"Resizing mask back to original dimensions: {original_width}x{original_height}")
+                logging.info(f"Resizing mask to {original_width}x{original_height}")
                 refined_alpha_pil = Image.fromarray(refined_alpha)
-                refined_alpha_pil = refined_alpha_pil.resize((original_width, original_height), Image.LANCZOS)
+                # Use BILINEAR for mask resizing
+                refined_alpha_pil = refined_alpha_pil.resize((original_width, original_height), Image.BILINEAR)
                 refined_alpha = np.array(refined_alpha_pil)
                 
-                # Use the original image for creating foreground and background
                 input_image = Image.open(image_path).convert('RGBA')
                 input_array = np.array(input_image)
             
-            # Create foreground with refined edges
+            # Create foreground
             foreground = np.zeros((input_array.shape[0], input_array.shape[1], 4), dtype=np.uint8)
             foreground[:, :, :3] = input_array[:, :, :3]
             foreground[:, :, 3] = refined_alpha
-            
-            # Create foreground image with transparency
             foreground_img = Image.fromarray(foreground)
             
-            # Create background (scene with transparent subject)
+            # Create background
             background = input_image.copy()
-            background.putalpha(255)  # Make fully opaque first
-            alpha_bg = Image.fromarray(255 - refined_alpha)  # Invert refined mask for background
+            background.putalpha(255)
+            alpha_bg = Image.fromarray(255 - refined_alpha)
             background.putalpha(alpha_bg)
             
             # Save results
@@ -129,16 +116,11 @@ class SegmentationService:
             fore_path = processed_dir / f"{base_name}_foreground.png"
             back_path = processed_dir / f"{base_name}_background.png"
             
-            # Save mask
             Image.fromarray(refined_alpha).save(mask_path)
-            
-            # Save foreground with transparency
             foreground_img.save(fore_path, "PNG")
-            
-            # Save background with transparency
             background.save(back_path, "PNG")
             
-            # Clean up temporary file if created
+            # Clean up temporary file
             if is_resized and processing_path.exists():
                 try:
                     processing_path.unlink()
