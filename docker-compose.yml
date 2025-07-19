@@ -13,4 +13,7 @@ services:
       - S3_BUCKET=${S3_BUCKET}
       - S3_ENDPOINT=${S3_ENDPOINT}
       - S3_URL=${S3_URL}
-
+      - API_KEY=${API_KEY}
+      - PUBLIC_FRONTEND_URL=${PUBLIC_FRONTEND_URL}
+    env_file:
+      - .env  # This loads all .env variables

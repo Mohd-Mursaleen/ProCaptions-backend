@@ -44,9 +44,40 @@ class MultiLayerTextRequest(BaseModel):
 
 @router.post("/segment")
 async def segment_image(file: UploadFile, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
+    import psutil
+    import gc
+    from src.services.s3_service import S3Service
+    
+    # Initialize S3 service
+    s3_service = S3Service()
+    
     try:
-        # Log request information
+        # Check memory before processing
+        memory = psutil.virtual_memory()
+        if memory.percent > 85:
+            logger.warning(f"High memory usage before processing: {memory.percent}%")
+            gc.collect()
+            memory = psutil.virtual_memory()
+            if memory.percent > 90:
+                raise HTTPException(
+                    status_code=503, 
+                    detail=f"Server overloaded (Memory: {memory.percent}%). Please try again in a few moments."
+                )
+        
         logger.info(f"Segmentation request received for file: {file.filename}")
+        logger.info(f"Memory usage before processing: {memory.percent}%")
+        
+        # Validate file size (limit to 10MB for free tier)
+        file_size = 0
+        file.file.seek(0, 2)  # Seek to end
+        file_size = file.file.tell()
+        file.file.seek(0)  # Reset to beginning
+        
+        if file_size > 10 * 1024 * 1024:  # 10MB limit
+            raise HTTPException(
+                status_code=413, 
+                detail="File too large. Maximum size is 10MB for free tier."
+            )
         
         # Save temporary file
         temp_dir = Path("uploads/temp")
@@ -58,28 +89,34 @@ async def segment_image(file: UploadFile, api_key: str = Depends(get_api_key)) -
         with open(temp_path, 'wb') as out_file:
             shutil.copyfileobj(file.file, out_file)
             
-        logger.info(f"Temporary file saved: {temp_path}")
+        logger.info(f"Temporary file saved: {temp_path} ({file_size / 1024 / 1024:.1f}MB)")
 
         # Process with segmentation service
         fore_path, back_path, mask_path = await segmentation_service.segment_image(temp_path)
         logger.info(f"Segmentation successful: foreground={fore_path}, background={back_path}, mask={mask_path}")
 
         # Upload to S3
-        foreground_cloud = _handle_local_fallback(fore_path)
-        background_cloud = _handle_local_fallback(back_path)
-        mask_cloud = _handle_local_fallback(mask_path)
+        foreground_cloud = await s3_service.upload_file(fore_path, "foreground")
+        background_cloud = await s3_service.upload_file(back_path, "background")
+        mask_cloud = await s3_service.upload_file(mask_path, "mask")
         
-        logger.info(f"Image URL details: foreground={foreground_cloud['url']}, background={background_cloud['url']}, mask={mask_cloud['url']}")
+        logger.info(f"S3 upload successful: foreground={foreground_cloud['url']}, background={background_cloud['url']}, mask={mask_cloud['url']}")
 
         # Clean up temporary file
-        os.remove(temp_path)
-        logger.info(f"Temporary file removed: {temp_path}")
+        if temp_path.exists():
+            os.remove(temp_path)
+            logger.info(f"Temporary file removed: {temp_path}")
         
         # Always clean up the processed files after uploading to S3
-        os.remove(fore_path)
-        os.remove(back_path)
-        os.remove(mask_path)
+        for path in [fore_path, back_path, mask_path]:
+            if os.path.exists(path):
+                os.remove(path)
         logger.info("Processed files removed (using S3 storage)")
+
+        # Final memory cleanup
+        gc.collect()
+        final_memory = psutil.virtual_memory()
+        logger.info(f"Memory usage after processing: {final_memory.percent}%")
 
         return {
             "foreground": foreground_cloud["url"],
@@ -87,8 +124,18 @@ async def segment_image(file: UploadFile, api_key: str = Depends(get_api_key)) -
             "mask": mask_cloud["url"]
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         logger.error(f"Segmentation failed: {str(e)}")
+        # Cleanup on error
+        gc.collect()
+        if 'temp_path' in locals() and temp_path.exists():
+            try:
+                os.remove(temp_path)
+            except:
+                pass
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/add-dramatic-text", response_model=TextResponse)
@@ -96,6 +143,11 @@ async def add_dramatic_text(request: DramaticTextRequest, api_key: str = Depends
     """
     Add dramatic impact-style text to an image (the text that appears behind subjects)
     """
+    from src.services.s3_service import S3Service
+    
+    # Initialize S3 service
+    s3_service = S3Service()
+    
     try:
         # Log the incoming request details
         logging.info(f"add_dramatic_text request received: {request.dict()}")
@@ -127,7 +179,8 @@ async def add_dramatic_text(request: DramaticTextRequest, api_key: str = Depends
         # Call the composition service with the parameters
         # Pass to_uppercase=False to prevent automatic capitalization
         try:
-            path, info = await composition_service.add_dramatic_text(
+            # Process the image and add text
+            local_path, info = await composition_service.add_dramatic_text(
                 background_path=request.background_path,
                 text=request.text,
                 position=position,
@@ -139,7 +192,15 @@ async def add_dramatic_text(request: DramaticTextRequest, api_key: str = Depends
                 effects=request.effects
             )
             
-            return {"image_with_text": path}
+            # Upload the result to S3
+            s3_result = await s3_service.upload_file(local_path, "text")
+            
+            # Clean up the local file
+            if os.path.exists(local_path):
+                os.remove(local_path)
+                logger.info(f"Removed local file after S3 upload: {local_path}")
+            
+            return {"image_with_text": s3_result["url"]}
         except FileNotFoundError as e:
             logger.error(f"File not found error: {str(e)}")
             raise HTTPException(status_code=404, detail=f"Image file not found: {str(e)}")
@@ -152,24 +213,27 @@ async def add_dramatic_text(request: DramaticTextRequest, api_key: str = Depends
 
 @router.post("/compose")
 async def compose_final(request: ComposeRequest, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
+    from src.services.s3_service import S3Service
+    
+    # Initialize S3 service
+    s3_service = S3Service()
+    
     try:
-        result_path = await composition_service.compose_final_image(
+        # Compose the image locally
+        local_path = await composition_service.compose_final_image(
             request.background_with_text_path,
             request.foreground_path
         )
         
-        # Schedule cleanup for all temporary files
-        parent_dir = str(Path(request.background_with_text_path).parent)
-        for file_path in glob.glob(os.path.join(parent_dir, "*.*")):
-            await cleanup_service.schedule_cleanup(file_path)
-            
-        # Schedule cleanup for the final image
-        if result_path.startswith('/'):
-            result_path = result_path[1:]  # Remove leading slash
-        full_path = os.path.join(os.getcwd(), result_path)
-        await cleanup_service.schedule_cleanup(full_path)
+        # Upload the result to S3
+        s3_result = await s3_service.upload_file(local_path, "composed")
         
-        return {"final_image": result_path}
+        # Clean up the local file
+        if os.path.exists(local_path):
+            os.remove(local_path)
+            logger.info(f"Removed local file after S3 upload: {local_path}")
+        
+        return {"final_image": s3_result["url"]}
     except Exception as e:
         logger.error(f"Error in compose_final: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error composing final image: {str(e)}")
@@ -177,6 +241,11 @@ async def compose_final(request: ComposeRequest, api_key: str = Depends(get_api_
 @router.post("/add-multiple-text-layers")
 async def add_multiple_text_layers(request: MultiLayerTextRequest, api_key: str = Depends(get_api_key)) -> Dict[str, str]:
     """Add multiple text layers to a background image"""
+    from src.services.s3_service import S3Service
+    
+    # Initialize S3 service
+    s3_service = S3Service()
+    
     try:
         # Log the incoming request
         logging.info(f"Adding multiple text layers to {request.background_path}")
@@ -203,13 +272,36 @@ async def add_multiple_text_layers(request: MultiLayerTextRequest, api_key: str 
         
         # Call composition service
         try:
-            image_path = await composition_service.add_multiple_text_layers(
+            # Process the image locally
+            local_path = await composition_service.add_multiple_text_layers(
                 request.background_path,
                 layers
             )
             
-            # Return the image path
-            return {"image_with_text": image_path}
+            # Log the local path for debugging
+            logging.info(f"Local path before S3 upload: {local_path}, type: {type(local_path)}")
+            
+            # Convert Path to string if needed
+            if isinstance(local_path, Path):
+                local_path_str = str(local_path)
+            else:
+                local_path_str = local_path
+                
+            # Check if the file exists
+            if not os.path.exists(local_path_str):
+                logging.error(f"File does not exist: {local_path_str}")
+                raise FileNotFoundError(f"Output file not found: {local_path_str}")
+                
+            # Upload the result to S3
+            s3_result = await s3_service.upload_file(local_path_str, "multilayer")
+            
+            # Clean up the local file
+            if os.path.exists(local_path_str):
+                os.remove(local_path_str)
+                logger.info(f"Removed local file after S3 upload: {local_path_str}")
+            
+            # Return the S3 URL
+            return {"image_with_text": s3_result["url"]}
         except FileNotFoundError as e:
             logger.error(f"File not found error in add_multiple_text_layers: {str(e)}")
             raise HTTPException(status_code=404, detail=f"Image file not found: {str(e)}")

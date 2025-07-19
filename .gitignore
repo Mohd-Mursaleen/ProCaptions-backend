@@ -30,7 +30,7 @@ models/
 hero-geometric/
 # Project specific
 uploads/
-assets/fonts/
+
 .env
 .DS_Store
 

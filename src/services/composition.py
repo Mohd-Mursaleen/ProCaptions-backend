@@ -88,7 +88,7 @@ class CompositionService:
         """
         logger.info(f"Resolving image path: {image_path}")
         
-        # If it's a URL, download it
+        # If it's a URL (including S3 URLs), download it
         if image_path.startswith(('http://', 'https://')):
             logger.info(f"Detected URL path: {image_path}")
             try:
@@ -527,8 +527,8 @@ class CompositionService:
             # Log the path of the saved image
             logging.info(f"Saved text image to: {text_path}")
             
-            # Upload to cloud storage
-            cloud_url = _handle_local_fallback(text_path)
+            # Return the local path - S3 upload will be handled by the route handler
+            cloud_url = str(text_path)
             
             # Store the original (non-adjusted) position in the return info
             # This ensures the frontend gets back the same position it sent
@@ -649,17 +649,16 @@ class CompositionService:
             
             # Create a unique filename for the result
             timestamp = int(time.time())
-            result_path = Path(f"uploads/public/composed_{timestamp}.png")
+            unique_id = uuid.uuid4().hex[:8]
+            result_path = Path(f"uploads/public/composed_{timestamp}_{unique_id}.png")
             result.save(result_path)
             
-            # Upload to S3 and get public URL
-            result_info = _handle_local_fallback(result_path)
-            
-            return result_info['url']
+            # Return the local path - S3 upload will be handled by the route handler
+            return result_path
         except Exception as e:
             logging.error(f"Error in compose_final_image: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to compose final image: {str(e)}")
-    async def add_multiple_text_layers(self, background_path: str, text_layers: List['TextLayer']) -> str:
+    async def add_multiple_text_layers(self, background_path: str, text_layers: List['TextLayer']) -> Path:
         """
         Add multiple text layers to a background image
         
@@ -668,7 +667,7 @@ class CompositionService:
             text_layers: List of TextLayer objects
             
         Returns:
-            Path to the image with all text layers added
+            Path to the local image file with all text layers added
         """
         try:
             # Resolve the background path
@@ -707,15 +706,13 @@ class CompositionService:
             
             # Save the result
             timestamp = int(time.time())
-            result_path = Path(f"uploads/public/multilayer_{timestamp}.png")
+            unique_id = uuid.uuid4().hex[:8]
+            result_path = Path(f"uploads/processed/multilayer_{timestamp}_{unique_id}.png")
             background.save(result_path)
             logger.info(f"Saved multilayer image to: {result_path}")
             
-
-            result_info = _handle_local_fallback(result_path)
-            logger.info(f"Uploaded multilayer image to S3: {result_info['url']}")
-            
-            return result_info['url']
+            # Return the local path - S3 upload will be handled by the route handler
+            return result_path
         except Exception as e:
             logging.error(f"Error in add_multiple_text_layers: {str(e)}", exc_info=True)
             raise ValueError(f"Failed to add multiple text layers: {str(e)}")
