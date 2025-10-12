@@ -2,9 +2,11 @@
 
 ProCaptions is a web application that uses advanced AI to automatically isolate the main subject in images, add customizable text behind it, and create professional-looking poster-style designs.
 
+[Live here](https://procaptions.vercel.app/preview)
 ## Demo  
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=6iUkTiAAxG8)
-[Live](https://procaptions.vercel.app/preview)
+
+
 
 ## Key Features
 
