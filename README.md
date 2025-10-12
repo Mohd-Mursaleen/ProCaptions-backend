@@ -4,7 +4,7 @@ ProCaptions is a web application that uses advanced AI to automatically isolate 
 
 ## Demo  
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=6iUkTiAAxG8)
-*too broke to deploy (needs a good config server)
+[Live](https://procaptions.vercel.app/preview)
 
 ## Key Features
 
