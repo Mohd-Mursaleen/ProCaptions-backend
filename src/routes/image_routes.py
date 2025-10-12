@@ -11,6 +11,7 @@ import glob
 import uuid
 from src.security import get_api_key
 from src.utils.cleanup import cleanup_service
+from src.services.s3_service import S3Service
 
 router = APIRouter()
 segmentation_service = SegmentationService()
@@ -311,6 +312,61 @@ async def add_multiple_text_layers(request: MultiLayerTextRequest, api_key: str 
     except Exception as e:
         logging.error(f"Failed to add multiple text layers: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add multiple text layers: {str(e)}")
+
+@router.get("/download-image")
+async def download_image(url: str) -> None:
+    """
+    Download an image from S3 and serve it
+    
+    Args:
+        url: The S3 URL of the image to download
+    """
+    from fastapi.responses import FileResponse
+    from urllib.parse import urlparse, unquote
+    import tempfile
+    
+    # Initialize S3 service
+    s3_service = S3Service()
+    
+    try:
+        # Parse and decode the URL
+        parsed_url = urlparse(unquote(url))
+        logger.info(f"Processing download request for URL: {url}")
+        logger.info(f"Parsed URL: {parsed_url}")
+        
+        # Extract the S3 key from the URL path
+        s3_key = parsed_url.path.lstrip('/')
+        
+        # If URL contains the bucket name in the path, remove it
+        if s3_key.startswith(s3_service.bucket + '/'):
+            s3_key = s3_key[len(s3_service.bucket)+1:]
+        
+        logger.info(f"Extracted S3 key: {s3_key}")
+        
+        if not s3_key:
+            raise HTTPException(status_code=400, detail="Invalid S3 URL format")
+        
+        # Create a temporary file to store the download
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+            temp_path = Path(tmp_file.name)
+            
+        # Download the file from S3
+        await s3_service.download_file(s3_key, temp_path)
+        
+        # Schedule the file for cleanup
+        background_task = cleanup_service.schedule_cleanup(str(temp_path))
+        
+        # Return the file as a response
+        return FileResponse(
+            path=temp_path,
+            filename=Path(s3_key).name,
+            media_type='image/png',
+            background=background_task
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading image: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error downloading image: {str(e)}")
 
 @router.get("/list-uploads")
 async def list_uploads() -> Dict[str, List[str]]:

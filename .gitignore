@@ -39,3 +39,4 @@ uploads/
 *.pt
 *.onnx
 *.bin
+*.pem

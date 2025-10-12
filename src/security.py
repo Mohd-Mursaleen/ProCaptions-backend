@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get API key from environment variable
-API_KEY = os.getenv("API_KEY", "your-secret-api-key-change-this")  # Default value for development
+API_KEY = os.getenv("API_KEY")  # Default value for development
 
 # Create API key header scheme
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)

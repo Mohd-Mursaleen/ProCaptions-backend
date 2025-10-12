@@ -1,5 +1,5 @@
-# Optimized Dockerfile for AWS Free Tier (t2.micro)
-FROM python:3.10-slim
+# Multi-stage Dockerfile with Nginx for AWS EC2
+FROM python:3.10-slim as backend
 
 WORKDIR /app
 
@@ -22,7 +22,6 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # PRE-DOWNLOAD AI MODEL (Critical for free tier!)
-# This prevents the 2-5 minute delay on first request
 RUN python -c "from rembg import new_session; session = new_session('u2net'); print('✅ AI model pre-downloaded successfully')"
 
 # Copy fonts first to ensure they're available
@@ -45,18 +44,32 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     MALLOC_TRIM_THRESHOLD_=100000
 
-# Add health check
+# Final stage with Nginx
+FROM nginx:alpine
+
+# Install Python and supervisor
+RUN apk add --no-cache python3 py3-pip supervisor curl
+
+# Copy Python app from backend stage
+COPY --from=backend /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=backend /usr/local/bin/uvicorn /usr/local/bin/uvicorn
+COPY --from=backend /app /app
+
+# Copy Nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy supervisor configuration
+COPY supervisord.conf /etc/supervisord.conf
+
+# Create necessary directories
+RUN mkdir -p /var/log/supervisor /app/uploads
+
+# Expose ports
+EXPOSE 80
+
+# Health check
 HEALTHCHECK --interval=60s --timeout=30s --start-period=120s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost/health || exit 1
 
-# Expose port
-EXPOSE 8000
-
-# Optimized command for t2.micro (single worker, extended timeouts)
-CMD ["uvicorn", "main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1", \
-     "--timeout-keep-alive", "300", \
-     "--timeout-graceful-shutdown", "30", \
-     "--access-log"]
+# Start supervisor (manages both Nginx and Uvicorn)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
