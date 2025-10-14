@@ -588,10 +588,7 @@ class CompositionService:
             # Apply uppercase conversion if requested
             if to_uppercase:
                 processed_text = processed_text.upper()
-                
-            # Add period if requested and not already ending with punctuation
-            if with_period and not processed_text[-1] in ".!?":
-                processed_text = processed_text + "."
+                        
             
             # Pass the effects directly without applying defaults
             # This ensures that when effects=None, no shadow is applied
