@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # PRE-DOWNLOAD AI MODEL (Critical for free tier!)
-RUN python -c "from rembg import new_session; session = new_session('u2net'); print('✅ AI model pre-downloaded successfully')"
+RUN python -c "from rembg import new_session; session = new_session('u2net_human_seg'); print('✅ AI model pre-downloaded successfully')"
 
 # Copy fonts first to ensure they're available
 COPY assets/fonts /app/assets/fonts

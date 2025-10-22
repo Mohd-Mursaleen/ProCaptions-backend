@@ -9,7 +9,7 @@ ProCaptions is a web application that uses AI to automatically isolate the main 
 ## Key Features
 
 ### 1. AI Image Segmentation
-- **Automatic Subject Isolation**: Uses rembg with u2net model for background removal
+- **Automatic Subject Isolation**: Uses rembg with u2net_human_seg model for background removal
 - **Edge Smoothing**: Gaussian blur and contrast enhancement for clean edges
 - **Memory Optimized**: Automatic image resizing to 1080p max resolution
 - **Format Support**: JPEG, PNG, HEIF with EXIF orientation correction
@@ -29,7 +29,7 @@ ProCaptions is a web application that uses AI to automatically isolate the main 
 
 ### Backend
 - **Framework**: FastAPI (Python) with async support
-- **AI Model**: rembg library with u2net model for segmentation
+- **AI Model**: rembg library with u2net_human_seg model for segmentation
 - **Image Processing**: PIL (Pillow), NumPy for image manipulation
 - **Storage**: AWS S3 for cloud storage with local fallback
 - **Memory Management**: psutil monitoring with garbage collection
@@ -162,7 +162,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - rembg library for AI-powered background removal
-- u2net model for image segmentation
+- u2net_human_seg model for image segmentation
 - FastAPI for the robust API framework
 - PIL/Pillow for image processing capabilities
 
@@ -182,6 +182,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ### AI Model Optimization
 - Singleton pattern for model loading (loads once, reuses)
-- u2net model pre-downloaded in Docker for faster startup
+- u2net_human_seg model pre-downloaded in Docker for faster startup
 - Alpha matting enabled for better edge quality
 - Post-processing with Gaussian blur and contrast enhancement 

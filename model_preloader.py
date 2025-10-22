@@ -19,7 +19,7 @@ class ModelPreloader:
             logger.info("Preloading rembg model...")
             
             # Initialize session
-            self.session = new_session('u2netp')
+            self.session = new_session('u2net_human_seg')
             
             # Create a small dummy image to trigger model download
             dummy_image = Image.new('RGB', (100, 100), color='red')

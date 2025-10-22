@@ -29,8 +29,8 @@ class SegmentationService:
         # Only initialize session once (lazy loading)
         if self._session is None:
             logging.info("Initializing AI model (one-time setup)...")
-            # Use u2net for better quality
-            self._session = new_session('u2net')
+            # Use u2net_human_seg for better quality
+            self._session = new_session('u2net_human_seg')
             logging.info("AI model loaded successfully!")
     
     def check_memory(self):
