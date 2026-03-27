@@ -40,3 +40,5 @@ uploads/
 *.onnx
 *.bin
 *.pem
+*.pub
+procaptions
